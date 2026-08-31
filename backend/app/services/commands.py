@@ -154,11 +154,22 @@ class CommandService:
         return not (action.expires_at is not None and action.expires_at <= now)
 
     async def acknowledge(
-        self, action: EscalationAction, status: CommandStatus, executed_at: datetime | None = None
+        self,
+        action: EscalationAction,
+        status: CommandStatus,
+        executed_at: datetime | None = None,
+        detail: dict[str, Any] | None = None,
     ) -> None:
         action.status = status.value
         if status is CommandStatus.EXECUTED:
             action.executed_at = executed_at or datetime.now(UTC)
+
+        # Keep the reason. The collector distinguishes "the sync failed" from
+        # "the watch has no recent reading" -- only the first is a fault here --
+        # and discarding that left every failure looking identical, which is
+        # exactly the state that makes a problem impossible to diagnose.
+        if detail:
+            action.params = {**(action.params or {}), "ack_detail": detail}
         await self._hub.publish(
             action.subject_id,
             "escalation",

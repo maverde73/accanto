@@ -56,7 +56,7 @@ async def ack_command(
     action = await commands.get_for_device(command_id, device.subject_id)
     if action is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Command not found")
-    await commands.acknowledge(action, payload.status, payload.executed_at)
+    await commands.acknowledge(action, payload.status, payload.executed_at, payload.detail)
 
 
 @router.post("/{command_id}/response", status_code=status.HTTP_204_NO_CONTENT)
