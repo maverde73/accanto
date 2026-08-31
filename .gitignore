@@ -1,0 +1,44 @@
+# Claude Code local settings / session artifacts
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.iml
+
+# Secrets / env (mai committare)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python (backend)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js (viewer)
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-error.log*
+
+# Android (collector)
+*.apk
+*.aab
+*.keystore
+local.properties
+.gradle/
+build/
+captures/
