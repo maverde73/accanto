@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -10,8 +12,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.deps import GrantDep, LivenessDep, SessionDep, UserDep, require_scope
+from app.domain.liveness import ClockReading, Clocks, choose_headline
 from app.domain.scopes import Scope
+from app.domain.tiers import EventKind, tier_for
 from app.models.identity import Subject
+from app.models.state import LivenessSnapshot
 from app.repositories.snapshot import SnapshotRepository
 from app.schemas.snapshot import (
     BatteriesOut,
@@ -74,15 +79,27 @@ async def read_snapshot(
         return _from_values(values, scopes)
 
     show_vitals = Scope.VITALS in scopes
+
+    # The headline is re-derived from the stored clocks at read time, never
+    # served as stored. The clocks are facts and do not change; the headline is
+    # a function of those facts *and of now*. A stored one goes stale the moment
+    # data stops arriving -- which is exactly when it matters -- and would keep
+    # asserting "active" indefinitely while nobody had heard anything for half
+    # an hour. Cheap to recompute: it is pure arithmetic over four timestamps.
+    cfg = config_from_subject(subject.config, subject.timezone)
+    headline = choose_headline(_clocks_from(snapshot), cfg, datetime.now(UTC))
+
     return SnapshotOut(
         subject_id=str(subject_id),
         computed_at=snapshot.computed_at,
         headline=HeadlineOut(
-            state=snapshot.headline_state,
-            color=snapshot.headline_color,
-            at=snapshot.headline_at,
-            evidence_kind=snapshot.headline_evidence,
-            evidence=localise_evidence(snapshot.headline_evidence),
+            state=headline.state.value,
+            color=headline.color.value,
+            at=headline.at,
+            evidence_kind=headline.evidence_kind.value if headline.evidence_kind else None,
+            evidence=localise_evidence(
+                headline.evidence_kind.value if headline.evidence_kind else None
+            ),
         ),
         clocks=ClocksOut(
             interaction=snapshot.last_interaction_at,
@@ -105,6 +122,33 @@ async def read_snapshot(
             lag_seconds_p90=snapshot.pipeline_lag_seconds,
             healthy=LivenessService.pipeline_healthy(snapshot.pipeline_lag_seconds),
         ),
+    )
+
+
+def _clocks_from(snapshot: LivenessSnapshot) -> Clocks:
+    """Rebuild the domain clocks from stored timestamps.
+
+    The evidence kind is only retained for the tier that produced the stored
+    headline, so each clock is rehydrated with a neutral kind and the winning
+    one keeps its own. Anything else would attribute a specific event to a tier
+    the snapshot cannot vouch for.
+    """
+    stored_kind: EventKind | None = None
+    if snapshot.headline_evidence:
+        with suppress(ValueError):
+            stored_kind = EventKind(snapshot.headline_evidence)
+
+    def reading(at: datetime | None, fallback: EventKind) -> ClockReading | None:
+        if at is None:
+            return None
+        kind = stored_kind if stored_kind and tier_for(stored_kind) is tier_for(fallback) else fallback
+        return ClockReading(at=at, kind=kind)
+
+    return Clocks(
+        interaction=reading(snapshot.last_interaction_at, EventKind.APP_USAGE),
+        movement=reading(snapshot.last_movement_at, EventKind.ACTIVITY),
+        vital=reading(snapshot.last_vital_at, EventKind.HR),
+        contact=reading(snapshot.last_contact_at, EventKind.HEARTBEAT),
     )
 
 

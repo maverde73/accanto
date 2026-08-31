@@ -44,6 +44,22 @@ export function PresenceView({
     return () => clearInterval(id);
   }, []);
 
+  // The state itself also decays. A page opened while someone was active keeps
+  // saying "In attività" for as long as it stays open, because the only thing
+  // that would correct it is an event -- and no events arriving is precisely
+  // the case that needs correcting. Re-asking the server closes that gap
+  // without copying the fusion rules into the browser, where the two would
+  // drift apart.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      const response = await fetch(`/api/snapshot?subject=${encodeURIComponent(subjectId)}`);
+      if (!response.ok) return;
+      setSnapshot((await response.json()) as Snapshot);
+      setNow(new Date());
+    }, SNAPSHOT_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [subjectId]);
+
   useEffect(() => {
     const source = new EventSource(`/api/stream?subject=${encodeURIComponent(subjectId)}`);
 
@@ -172,6 +188,9 @@ function ClockRowView({ row, now }: { row: ClockRow; now: Date }) {
 }
 
 const CHECKIN_TIMEOUT_MS = 120_000;
+
+/** Short enough that a decaying state is never badly out of date on screen. */
+const SNAPSHOT_REFRESH_MS = 30_000;
 
 function CheckinStatus({ state }: { state: string }) {
   if (state === "idle") return null;
