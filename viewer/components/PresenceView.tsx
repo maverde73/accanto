@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { clockRows, headlineView } from "@/lib/presence";
-import { relative } from "@/lib/time";
+import { clockRows, collectorUnreachable, headlineView } from "@/lib/presence";
+import { duration, relative } from "@/lib/time";
 import type { ClockRow } from "@/lib/presence";
 import type { Snapshot } from "@/lib/types";
 import { BatteryIcon, ChevronIcon, HeartIcon, LockIcon, MotionIcon } from "@/components/icons";
@@ -15,6 +15,8 @@ const ICONS = {
   vital: HeartIcon,
   contact: BatteryIcon,
 } as const;
+
+type CheckinState = "idle" | "sending" | "waiting" | "done" | "failed" | "no_answer";
 
 interface Props {
   subjectId: string;
@@ -33,7 +35,7 @@ export function PresenceView({
 }: Props) {
   const [snapshot, setSnapshot] = useState(initial);
   const [now, setNow] = useState(() => new Date());
-  const [checkin, setCheckin] = useState<"idle" | "sending" | "waiting" | "done" | "failed">("idle");
+  const [checkin, setCheckin] = useState<CheckinState>("idle");
 
   // Relative labels ("4 minuti fa") go stale on their own, with no new data
   // arriving. Re-render on a timer so the page never quietly lies about age.
@@ -64,12 +66,25 @@ export function PresenceView({
   const view = headlineView(snapshot, now);
   const rows = clockRows(snapshot, now);
 
+  const unreachable = collectorUnreachable(snapshot, now);
+
   async function requestCheckin() {
     setCheckin("sending");
     const response = await fetch(`/api/checkin?subject=${encodeURIComponent(subjectId)}`, {
       method: "POST",
     });
-    setCheckin(response.ok ? "waiting" : "failed");
+    if (!response.ok) {
+      setCheckin("failed");
+      return;
+    }
+    setCheckin("waiting");
+
+    // A request that is never answered must say so. Left alone the panel would
+    // sit on "waiting" indefinitely, which reads as "in progress" when what
+    // actually happened is that the phone never heard the question.
+    window.setTimeout(() => {
+      setCheckin((current) => (current === "waiting" ? "no_answer" : current));
+    }, CHECKIN_TIMEOUT_MS);
   }
 
   return (
@@ -86,7 +101,14 @@ export function PresenceView({
         {view.detail ? <div className="headline-detail">{view.detail}</div> : null}
       </div>
 
-      {!snapshot.pipeline.healthy ? (
+      {unreachable ? (
+        <div className="banner tone-amber">
+          <div className="banner-title">Il telefono non risponde</div>
+          Nessun contatto da {duration(snapshot.clocks.contact, now)}. Non è un allarme sulla
+          persona: è il collegamento con il suo telefono a essere interrotto. Finché dura,{" "}
+          <strong>i comandi qui sotto restano in attesa e non arrivano.</strong>
+        </div>
+      ) : !snapshot.pipeline.healthy ? (
         <div className="banner tone-grey">
           <div className="banner-title">Aggiornamenti in ritardo</div>
           I dati stanno arrivando più lentamente del solito. Non è un allarme sulla persona:
@@ -149,6 +171,8 @@ function ClockRowView({ row, now }: { row: ClockRow; now: Date }) {
   );
 }
 
+const CHECKIN_TIMEOUT_MS = 120_000;
+
 function CheckinStatus({ state }: { state: string }) {
   if (state === "idle") return null;
 
@@ -157,16 +181,15 @@ function CheckinStatus({ state }: { state: string }) {
   // impression that nothing is happening.
   const messages: Record<string, string> = {
     sending: "Richiesta inviata…",
-    waiting: "Segnali del telefono ricevuti. Attendo il battito aggiornato dall'orologio…",
-    done: "Risposta completa ricevuta.",
+    waiting: "In attesa della risposta dal telefono…",
+    done: "Risposta ricevuta.",
     failed: "Non è stato possibile inviare la richiesta.",
+    no_answer:
+      "Il telefono non ha risposto. La richiesta resta in attesa e verrà eseguita appena il telefono tornerà raggiungibile.",
   };
 
-  return (
-    <div className={`banner ${state === "failed" ? "tone-amber" : "tone-green"}`}>
-      {messages[state]}
-    </div>
-  );
+  const tone = state === "failed" || state === "no_answer" ? "tone-amber" : "tone-green";
+  return <div className={`banner ${tone}`}>{messages[state]}</div>;
 }
 
 function mergeSnapshot(current: Snapshot, incoming: Record<string, unknown>): Snapshot {

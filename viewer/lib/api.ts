@@ -86,6 +86,10 @@ export const api = {
   alerts: (id: string) => request<Alert[]>(`/subjects/${id}/alerts?limit=20`),
   checkins: (id: string) => request<Checkin[]>(`/subjects/${id}/checkins?limit=5`),
   requestCheckin: (id: string) => request<Checkin>(`/subjects/${id}/checkin`, { method: "POST" }),
+  escalations: (id: string) =>
+    request<Array<{ id: string; action_type: string; status: string; rung: number }>>(
+      `/subjects/${id}/escalations?limit=20`,
+    ),
   escalate: (id: string, actionType: string, params: Record<string, unknown> = {}) =>
     request<{ id: string; rung: number; status: string }>(`/subjects/${id}/escalate`, {
       method: "POST",

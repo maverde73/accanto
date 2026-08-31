@@ -49,6 +49,26 @@ const RUNGS: Rung[] = [
   },
 ];
 
+const CONFIRMATION_TIMEOUT_MS = 45_000;
+const POLL_INTERVAL_MS = 3_000;
+
+/** Polls until the phone confirms the rung was carried out, or we give up. */
+async function waitForExecution(subjectId: string, escalationId: string): Promise<boolean> {
+  const deadline = Date.now() + CONFIRMATION_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+    const response = await fetch(`/api/escalations?subject=${encodeURIComponent(subjectId)}`);
+    if (!response.ok) continue;
+
+    const list = (await response.json()) as Array<{ id: string; status: string }>;
+    const mine = list.find((item) => item.id === escalationId);
+    if (mine && mine.status !== "sent") return mine.status === "executed";
+  }
+  return false;
+}
+
 export function EscalationLadder({
   subjectId,
   scopes,
@@ -62,16 +82,36 @@ export function EscalationLadder({
   async function invoke(rung: Rung) {
     setBusy(rung.actionType);
     setResult(null);
+
     const response = await fetch(`/api/escalate?subject=${encodeURIComponent(subjectId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action_type: rung.actionType, params: {} }),
     });
+
+    if (!response.ok) {
+      setBusy(null);
+      setResult({ ok: false, text: "Non hai il permesso per questa azione." });
+      return;
+    }
+
+    const created = (await response.json()) as { id: string };
+    setResult({ ok: true, text: "Richiesta inoltrata. Attendo conferma dal telefono…" });
+
+    // Accepted by the server is not the same as carried out on the phone, and
+    // the difference is exactly what the caregiver is asking about. Reporting
+    // "sent" and stopping there would leave them believing something happened.
+    const executed = await waitForExecution(subjectId, created.id);
     setBusy(null);
     setResult(
-      response.ok
-        ? { ok: true, text: `Inviato: ${rung.title.toLowerCase()}.` }
-        : { ok: false, text: "Non hai il permesso per questa azione." },
+      executed
+        ? { ok: true, text: `Eseguito sul telefono: ${rung.title.toLowerCase()}.` }
+        : {
+            ok: false,
+            text:
+              "Il telefono non ha confermato. La richiesta resta in attesa e verrà eseguita " +
+              "appena il telefono tornerà raggiungibile.",
+          },
     );
   }
 

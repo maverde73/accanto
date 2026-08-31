@@ -170,3 +170,20 @@ function capitalise(text: string): string {
 export function can(scopes: string[], scope: string): boolean {
   return scopes.includes(scope);
 }
+
+export const COLLECTOR_SILENT_MINUTES = 12;
+
+/**
+ * Whether the phone has stopped reporting altogether.
+ *
+ * Distinct from the person being quiet, and it has to be, because the
+ * consequences differ: a quiet person may be fine, but an unreachable phone
+ * means every button on this page will do nothing. Saying "sent" and then
+ * staying silent is the exact failure this product exists to prevent.
+ *
+ * The heartbeat runs every five minutes, so twelve allows two to be missed
+ * before the alarm is raised.
+ */
+export function collectorUnreachable(snapshot: Snapshot, now: Date = new Date()): boolean {
+  return !isFresh(snapshot.clocks.contact, COLLECTOR_SILENT_MINUTES, now);
+}
