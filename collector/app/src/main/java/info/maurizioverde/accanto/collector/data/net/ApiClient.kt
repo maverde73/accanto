@@ -42,7 +42,16 @@ class ApiClient(
     private val client: HttpClient = engine ?: HttpClient(OkHttp) {
         expectSuccess = false
         install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                    // Omit nulls rather than sending them. A field the backend
+                    // declares as optional-and-absent is not the same as one
+                    // sent as null, and the difference cost every ack a 422.
+                    explicitNulls = false
+                },
+            )
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000

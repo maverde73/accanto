@@ -74,6 +74,17 @@ class CollectorService : Service() {
     /** Commands currently executing, so a poll does not start one twice. */
     private val inFlight = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
+    /**
+     * Commands already carried out on this device.
+     *
+     * The backend is the record of truth, but an acknowledgement can fail while
+     * the action itself succeeded. Without this, the command stays pending
+     * server-side and every poll runs it again -- which for a rung-3 nudge means
+     * buzzing the subject every ten seconds indefinitely. Being pestered by the
+     * app is a faster route to it being uninstalled than any missing feature.
+     */
+    private val alreadyExecuted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph.of(this)
@@ -328,15 +339,37 @@ class CollectorService : Service() {
      * while it is still running.
      */
     private fun dispatch(command: info.maurizioverde.accanto.collector.data.net.CommandDto) {
+        // Two separate guards, for two separate failures. `inFlight` stops a
+        // poll from starting a command that is still running; `alreadyExecuted`
+        // stops one from running again after an acknowledgement failed to
+        // reach the server. The second cost a real person a notification every
+        // ten seconds before it existed.
+        if (command.commandId in alreadyExecuted) return
         if (!inFlight.add(command.commandId)) return
+
         scope.launch {
             try {
                 executor.execute(command)
+                alreadyExecuted.add(command.commandId)
             } catch (error: Exception) {
                 Log.w(TAG, "command ${command.type} failed", error)
+                // Also remembered on failure. A command that threw halfway may
+                // already have buzzed the phone, and repeating it is worse than
+                // skipping it: the caregiver can always ask again.
+                alreadyExecuted.add(command.commandId)
             } finally {
                 inFlight.remove(command.commandId)
+                trimExecutedHistory()
             }
+        }
+    }
+
+    /** Commands expire server-side, so this set never needs to grow without bound. */
+    private fun trimExecutedHistory() {
+        if (alreadyExecuted.size <= MAX_REMEMBERED_COMMANDS) return
+        synchronized(alreadyExecuted) {
+            val excess = alreadyExecuted.size - MAX_REMEMBERED_COMMANDS
+            alreadyExecuted.take(excess).forEach { alreadyExecuted.remove(it) }
         }
     }
 
@@ -457,6 +490,7 @@ class CollectorService : Service() {
 
         /** Short: this is the latency a caregiver feels when they press the button. */
         private const val COMMAND_POLL_MILLIS = 10_000L
+        private const val MAX_REMEMBERED_COMMANDS = 200
 
         const val ACTION_LIVE_LOCATION_ON = "info.maurizioverde.accanto.LIVE_ON"
         const val ACTION_LIVE_LOCATION_OFF = "info.maurizioverde.accanto.LIVE_OFF"

@@ -65,7 +65,10 @@ class CommandAckIn(BaseModel):
 
     status: CommandStatus
     executed_at: datetime | None = None
-    detail: dict[str, Any] = Field(default_factory=dict)
+    # Optional, and explicitly nullable: a client that serialises absent fields
+    # as null is being reasonable, and rejecting it made every ack fail with a
+    # 422 -- which in turn made the collector re-run the command on each poll.
+    detail: dict[str, Any] | None = None
 
 
 class CommandResponseIn(BaseModel):
