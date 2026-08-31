@@ -71,15 +71,11 @@ class CommandExecutor(
                 )
             }
             "audio_out", "audio_channel" -> {
-                // Announced, never silent. Android shows an indicator whenever
-                // the microphone is live and there is no hiding it, so the design
-                // says so out loud rather than pretending otherwise.
-                Escalation.nudge(
-                    context,
-                    command.commandId,
-                    message(command, "Qualcuno sta aprendo un canale audio."),
-                )
-                ack(command, "failed", detail = "audio non ancora implementato")
+                // Not implemented, and deliberately not disguised. Sending a
+                // rung-3 nudge instead made the loudest rung indistinguishable
+                // from the quietest, and told the caregiver something had
+                // happened that had not. An honest failure is more useful.
+                ack(command, "failed", detail = "canale audio non ancora implementato")
             }
             else -> {
                 Log.w(TAG, "unknown command type ${command.type}")

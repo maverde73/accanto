@@ -18,6 +18,9 @@ interface Rung {
   effect: string;
   scope: string;
   tone: "green" | "amber" | "red";
+  /** Declared but not yet built. Offering a button that always fails would
+   *  tell the caregiver something happened when nothing did. */
+  unavailable?: boolean;
 }
 
 const RUNGS: Rung[] = [
@@ -25,7 +28,9 @@ const RUNGS: Rung[] = [
     rung: 3,
     actionType: "vibrate",
     title: "Fai vibrare il polso",
-    effect: "Una notifica discreta sul telefono, che l'orologio ripete al polso.",
+    effect:
+      "Una notifica discreta sul telefono, che l'orologio ripete al polso. Può rispondere " +
+      "«sto bene» con un tocco, senza aprire nulla e senza suoni.",
     scope: "escalation:notify",
     tone: "green",
   },
@@ -46,6 +51,7 @@ const RUNGS: Rung[] = [
       "Il telefono annuncia ad alta voce chi sta aprendo il canale, poi attiva il microfono. Nessun ascolto silenzioso.",
     scope: "escalation:audio",
     tone: "red",
+    unavailable: true,
   },
 ];
 
@@ -146,10 +152,16 @@ export function EscalationLadder({
             <button
               className="btn btn-secondary"
               style={{ height: 42 }}
-              disabled={!allowed || busy !== null}
+              disabled={!allowed || rung.unavailable || busy !== null}
               onClick={() => invoke(rung)}
             >
-              {!allowed ? "Non autorizzato" : busy === rung.actionType ? "Invio…" : "Esegui"}
+              {rung.unavailable
+                ? "Non ancora disponibile"
+                : !allowed
+                  ? "Non autorizzato"
+                  : busy === rung.actionType
+                    ? "Invio…"
+                    : "Esegui"}
             </button>
           </div>
         );

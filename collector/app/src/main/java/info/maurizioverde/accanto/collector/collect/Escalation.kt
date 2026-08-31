@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import info.maurizioverde.accanto.collector.AccantoApplication
 import info.maurizioverde.accanto.collector.R
 import info.maurizioverde.accanto.collector.ui.ConfirmActivity
+import info.maurizioverde.accanto.collector.ui.MainActivity
 
 /**
  * The rungs of the ladder, as they land on the subject's phone.
@@ -38,20 +39,27 @@ object Escalation {
      * service that breaks on every update.
      */
     fun nudge(context: Context, commandId: String, message: String) {
-        // Tapping has to lead somewhere. The text invites a reply, and a
-        // notification that invites a reply and then does nothing when tapped is
-        // a promise the app does not keep -- which, in a system whose whole
-        // purpose is to be trusted, is worse than sending nothing.
-        val reply = Intent(context, ConfirmActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            .putExtra(ConfirmActivity.EXTRA_COMMAND_ID, commandId)
-            .putExtra(ConfirmActivity.EXTRA_MESSAGE, message)
-
-        val pending = PendingIntent.getActivity(
+        // Answered with one tap on the action, and nothing opens. Rung 3 is the
+        // quiet one: routing it into the full-screen rung-4 screen -- which an
+        // earlier fix did -- made all three rungs feel identical and threw away
+        // the gradation that is the point of the ladder.
+        val reply = PendingIntent.getBroadcast(
             context,
             commandId.hashCode(),
-            reply,
+            Intent(context, ResponseReceiver::class.java)
+                .setAction(ResponseReceiver.ACTION_REPLY)
+                .putExtra(ResponseReceiver.EXTRA_COMMAND_ID, commandId)
+                .putExtra(ResponseReceiver.EXTRA_RESPONSE, "im_ok"),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+        // Tapping the body just opens the app, so the notification still leads
+        // somewhere without escalating on the subject's behalf.
+        val open = PendingIntent.getActivity(
+            context,
+            commandId.hashCode() + 1,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE,
         )
 
         val notification = NotificationCompat.Builder(context, AccantoApplication.CHANNEL_CONTACT)
@@ -60,8 +68,8 @@ object Escalation {
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setContentIntent(pending)
-            .addAction(0, "Sto bene", pending)
+            .setContentIntent(open)
+            .addAction(0, "Sto bene", reply)
             .setAutoCancel(true)
             .build()
 

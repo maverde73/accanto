@@ -116,6 +116,15 @@
             android:exported="false"
             android:foregroundServiceType="health|location" />
 
+        <!-- Answers a rung-3 nudge in one tap, without opening anything. -->
+        <receiver
+            android:name=".collect.ResponseReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="info.maurizioverde.accanto.NOTIFICATION_REPLY" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".collect.BootReceiver"
             android:exported="true">
