@@ -109,6 +109,48 @@ class HealthConnectReader(private val context: Context) {
         }
     }
 
+    /**
+     * One-shot survey of what Health Connect actually holds.
+     *
+     * Run at startup and logged. When a health pipeline stays silent, the
+     * question that matters is whether the data was ever there at all -- and
+     * that is not answerable from the outside without asking. Distinguishes
+     * "never written" from "written but not recently", which point at
+     * completely different causes.
+     */
+    suspend fun survey(days: Long = 7) {
+        if (!isAvailable || !hasPermissions()) {
+            Log.i(TAG, "survey: Health Connect non disponibile o senza permessi")
+            return
+        }
+        val until = Instant.now()
+        val since = until.minusSeconds(days * 24 * 3600)
+
+        val hr = runCatching {
+            client!!.readRecords(
+                ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(since, until)),
+            ).records
+        }.getOrElse { emptyList() }
+
+        val steps = runCatching {
+            client!!.readRecords(
+                ReadRecordsRequest(StepsRecord::class, TimeRangeFilter.between(since, until)),
+            ).records
+        }.getOrElse { emptyList() }
+
+        Log.i(
+            TAG,
+            "survey $days giorni -> battito: ${hr.size} record " +
+                "(${hr.sumOf { it.samples.size }} campioni), passi: ${steps.size} record",
+        )
+        hr.take(3).forEach { r ->
+            Log.i(TAG, "  battito da ${r.metadata.dataOrigin.packageName} @ ${r.startTime}")
+        }
+        steps.take(3).forEach { r ->
+            Log.i(TAG, "  passi da ${r.metadata.dataOrigin.packageName} @ ${r.startTime}")
+        }
+    }
+
     companion object {
         private const val TAG = "AccantoHealth"
 

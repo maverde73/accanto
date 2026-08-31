@@ -121,6 +121,7 @@ class CollectorService : Service() {
         scope.launch { healthLoop() }
         scope.launch { commandLoop() }
         scope.launch { catchUpOnMissedUsage() }
+        scope.launch { runCatching { health.survey() } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
