@@ -39,10 +39,18 @@ Gira **Xiaomi Vela**, un RTOS proprietario basato su NuttX (brandizzato come
   (campionamento rado e imprevedibile). Va portato a intervallo fisso (1–5 min) per
   avere un flusso utile. È l'impostazione che determina la granularità del battito.
 
+- **V1 — Aprire Mi Fitness scrive campioni HR freschi in Health Connect?** ✅ **Sì.**
+  Il sync forzato funziona: è ciò che rende possibile il check-in on-demand
+  (gradino 2). Il watch ha già il dato nel buffer, aprire l'app lo trasferisce.
+- **V2 — Il sync funziona a schermo bloccato/spento?** ✅ **Sì.** Era il rischio
+  tecnico principale dell'intero disegno: nello scenario reale il telefono è in
+  tasca. Con questo, **il BLE diretto (fase 4) non è necessario.**
+
 ### Verifiche ancora aperte
 
-- **Sync forzato all'apertura di Mi Fitness scrive campioni freschi in Health
-  Connect?** ← *la verifica che decide la fattibilità del check-in on-demand.*
+Nessuna bloccante. Le rimanenti cambiano *cosa* possiamo offrire ai gradini 3-5,
+non se il sistema sta in piedi:
+
 - **"Trova dispositivo" / far vibrare il watch** esiste in Mi Fitness? (per
   l'escalation dal polso via mirroring notifiche)
 - Il Watch 6 ha **altoparlante/microfono**? (il Watch 5 sì, per chiamate BT)

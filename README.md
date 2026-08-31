@@ -94,6 +94,18 @@ completa è in [`docs/02-device-constraints.md`](docs/02-device-constraints.md).
 | 10 | [Viewer web](docs/10-viewer-web.md) | Next.js, mappa, realtime |
 | 11 | [Roadmap](docs/11-roadmap.md) | Fasi e milestone |
 | 12 | [Glossario](docs/12-glossary.md) | Termini |
+| 13 | [Deployment](docs/13-deployment.md) | Cloudflare Tunnel, TLS, backup |
+
+## Codice
+
+| Componente | Stato |
+|---|---|
+| [backend](backend/README.md) — FastAPI + PostgreSQL | 157 test, 18 tabelle, 31 endpoint |
+| [viewer](viewer/README.md) — Next.js | 31 test, build pulita |
+| collector — Android/Kotlin | non ancora iniziato |
+
+Il mockup di partenza delle interfacce è in
+[`design/accanto-mobile.dc.html`](design/accanto-mobile.dc.html).
 
 ## Stato
 

@@ -8,7 +8,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import alerts, auth, checkins, commands, grants, ingest, location, realtime, subjects
+from app.api import (
+    alerts,
+    auth,
+    checkins,
+    commands,
+    grants,
+    ingest,
+    location,
+    realtime,
+    sse,
+    subjects,
+)
 from app.core.config import get_settings
 from app.core.db import dispose_engine
 
@@ -47,6 +58,7 @@ def create_app() -> FastAPI:
         alerts.router,
         grants.router,
         realtime.router,
+        sse.router,
     ):
         app.include_router(router, prefix="/v1")
 

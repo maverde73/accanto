@@ -12,6 +12,7 @@ from app.models.base import Base
 from app.models.events import ActivityEvent, AuditLog, LocationFix
 from app.models.identity import AccessGrant, AppUser, Device, Subject
 from app.models.interaction import ConfirmationResponse, EscalationAction
+from app.models.session import RefreshToken
 from app.models.state import CheckinRequest, LivenessSnapshot
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "LivenessSnapshot",
     "LocationFix",
     "PushToken",
+    "RefreshToken",
     "Subject",
 ]
