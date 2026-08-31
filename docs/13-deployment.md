@@ -32,12 +32,26 @@ Backend e viewer girano sulla macchina di casa; **`cloudflared`** li espone.
     │  cloudflared                             │
     │    ├── accanto.maurizioverde.info        │
     │    │     └──► localhost:3000  (viewer)   │
-    │    └── api.accanto.maurizioverde.info    │
+    │    └── accanto-api.maurizioverde.info    │
     │          └──► localhost:8000  (backend)  │
     │                                          │
     │  postgres  localhost:5432 (mai esposto)  │
     └─────────────────────────────────────────┘
 ```
+
+### Perché `accanto-api` e non `api.accanto`
+
+Il certificato Universal SSL di Cloudflare copre `dominio.tld` e `*.dominio.tld`:
+**un solo livello di sottodominio**. `api.accanto.maurizioverde.info` ne ha due,
+e l'handshake TLS fallisce con `handshake failure` — sintomo opaco, perché il
+DNS risolve correttamente e il tunnel è connesso.
+
+Coprire due livelli richiede Advanced Certificate Manager, a pagamento. Un nome
+piatto lo evita del tutto.
+
+> Verificato sul campo: `accanto.maurizioverde.info` (un livello) rispondeva 200
+> mentre `api.accanto.maurizioverde.info` (due) falliva, con lo stesso tunnel e
+> gli stessi record.
 
 ### Perché due hostname e non uno
 
@@ -47,7 +61,7 @@ raggiungibili, ma restano due superfici distinte:
 
 - `accanto.maurizioverde.info` → **viewer**. Nessuno dei suoi utenti conosce
   l'indirizzo dell'API, e il token di sessione non lascia mai il server.
-- `api.accanto.maurizioverde.info` → **backend**, per il solo collector.
+- `accanto-api.maurizioverde.info` → **backend**, per il solo collector.
 
 Un routing per path su un unico hostname funzionerebbe, ma renderebbe l'API
 raggiungibile dal browser dei caregiver senza alcun motivo: due nomi tengono le
@@ -64,7 +78,7 @@ dal backend.
 cloudflared tunnel login
 cloudflared tunnel create accanto
 cloudflared tunnel route dns accanto accanto.maurizioverde.info
-cloudflared tunnel route dns accanto api.accanto.maurizioverde.info
+cloudflared tunnel route dns accanto accanto-api.maurizioverde.info
 ```
 
 ### 2. `~/.cloudflared/config.yml`
@@ -77,7 +91,7 @@ ingress:
   - hostname: accanto.maurizioverde.info
     service: http://localhost:3000
 
-  - hostname: api.accanto.maurizioverde.info
+  - hostname: accanto-api.maurizioverde.info
     service: http://localhost:8000
     originRequest:
       # Lo stream SSE del realtime deve restare aperto e non essere bufferizzato.
@@ -132,7 +146,7 @@ ACCANTO_SECURE_COOKIES=1
 ### Collector Android
 
 ```
-BASE_URL = https://api.accanto.maurizioverde.info
+BASE_URL = https://accanto-api.maurizioverde.info
 ```
 
 ## SSE attraverso Cloudflare
@@ -147,6 +161,26 @@ Lo streaming funziona, con due accortezze già implementate nel backend:
 Se in futuro lo stream dovesse chiudersi a intervalli regolari, il sospetto
 principale è un timeout di inattività: la cura è abbassare il keepalive, non
 allungare i timeout.
+
+## Trappole incontrate davvero
+
+**Il certificato dell'account `cloudflared` vale per una zona sola.**
+`cloudflared tunnel route dns` con un hostname di un'altra zona non fallisce:
+crea silenziosamente il record **dentro la zona autorizzata**, appendendo il
+suffisso (`accanto.tuodominio.it` diventa
+`accanto.tuodominio.it.zona-del-cert.net`). Se i record non compaiono dove te li
+aspetti, è questo. Rimedio: crearli a mano dal dashboard come CNAME verso
+`<tunnel-id>.cfargotunnel.com`, **proxied**.
+
+**La rete di casa può non risolvere gli hostname dei tunnel.** Su questa rete i
+domini normali risolvono e quelli dei tunnel restituiscono NXDOMAIN, sia via
+`1.1.1.1` sia via `8.8.8.8` in chiaro — mentre gli stessi provider via DoH
+rispondono correttamente. Il DNS in chiaro viene intercettato dal router. Non è
+un problema del tunnel: da fuori casa funziona. Rimedio lato client: DNS over
+HTTPS nel browser.
+
+**Errore 1033 durante un riavvio** è normale: è Cloudflare che non trova il
+tunnel per i secondi in cui `cloudflared` non è in esecuzione.
 
 ## Il compromesso, detto chiaramente
 
