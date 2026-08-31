@@ -75,6 +75,28 @@
             </intent-filter>
         </activity>
 
+        <!-- Health Connect refuses to show its permission dialog unless the app
+             can explain why it wants the data. A good requirement: health data
+             is asked for far too casually. -->
+        <activity
+            android:name=".ui.PermissionsRationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".ui.PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Rung 4. Shown over the lock screen: a question that waits for
              someone to unlock their phone is not an answer to "is she well". -->
         <activity

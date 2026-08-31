@@ -107,6 +107,11 @@ fun PermissionScreen(state: PermissionState, onRefresh: () -> Unit) {
             )
         }
 
+        // Health Connect grants live outside the ordinary permission system and
+        // are the reason the heart rate stayed empty: nothing in the app ever
+        // asked for them.
+        HealthPermissionRow(onChanged = onRefresh)
+
         PermissionRow("Batteria senza restrizioni", state.batteryUnrestricted) {
             // Asking directly is allowed and far kinder than walking someone
             // through four levels of Settings.
