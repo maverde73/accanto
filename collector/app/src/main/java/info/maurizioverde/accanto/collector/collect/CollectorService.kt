@@ -304,8 +304,12 @@ class CollectorService : Service() {
     // ------------------------------------------------------------- notification
 
     private fun startForegroundWithType() {
+        // Both types, matching the manifest: the service exists for health data
+        // but also drives location, and Android 14+ refuses background location
+        // from a service that has not declared it.
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         } else {
             0
         }

@@ -7,12 +7,32 @@ Progetto: [`../README.md`](../README.md) · design:
 
 ## Stato
 
-**Scheletro compilabile e verificato.** Ci sono progetto Gradle, manifest con
-tutti i permessi, tema e token dal mockup, dominio dei segnali e 21 test unitari
-che passano.
+Raccoglie, accoda e invia. Ci sono foreground service, outbox Room, uploader
+resiliente, le quattro sorgenti di segnale, pairing e permission dashboard.
+**58 test unitari passano** e l'APK debug si costruisce.
 
-**Non c'è ancora** il cuore: foreground service, outbox Room, uploader, lettura
-di Health Connect e dei sensori, esecuzione dei comandi, permission dashboard.
+**Non c'è ancora** l'esecuzione dei comandi (sync forzato di Mi Fitness e i
+gradini 3-5) né le schermate complete dal mockup.
+
+## Pairing
+
+Il collector nasce senza credenziali. Il flusso:
+
+1. Chi amministra crea il device dal backend
+   (`POST /v1/subjects/{id}/devices`) e ottiene un **codice a 8 caratteri**.
+2. La persona monitorata lo digita **sul proprio telefono**.
+3. Il collector lo scambia con un token (`POST /v1/devices/pair`).
+
+La separazione fra codice e token non è cosmetica. Il codice lo digita una
+persona, quindi deve essere corto — e per questo è **monouso, valido 15 minuti
+e con rate limit**. Il token non lo digita nessuno, quindi può essere lungo.
+
+L'alfabeto del codice esclude `0/O` e `1/I/L`: viene letto ad alta voce o
+ricopiato a mano, e un carattere sbagliato è una telefonata di assistenza, non
+una misura di sicurezza.
+
+È anche il punto in cui il consenso diventa concreto: **nessuno può arruolare
+questo telefono da remoto.**
 
 ## Build
 

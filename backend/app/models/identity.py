@@ -56,7 +56,14 @@ class Device(Base):
     )
     kind: Mapped[str] = mapped_column(String(32), nullable=False)  # phone_collector | watch
     label: Mapped[str | None] = mapped_column(String(120))
-    auth_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    auth_token_hash: Mapped[str | None] = mapped_column(Text)
+    """Null until the device pairs. A row without a token cannot authenticate."""
+
+    pairing_code_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    """Short, human-typeable, single-use and short-lived. Hashed like any other
+    credential: it is briefly enough to claim a device."""
+    pairing_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fcm_token: Mapped[str | None] = mapped_column(Text)
     app_version: Mapped[str | None] = mapped_column(String(32))
     permissions_ok: Mapped[bool] = mapped_column(nullable=False, server_default="false")

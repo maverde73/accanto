@@ -13,6 +13,7 @@ from app.api import (
     auth,
     checkins,
     commands,
+    devices,
     grants,
     ingest,
     location,
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
 
     for router in (
         auth.router,
+        devices.router,
         ingest.router,
         commands.router,
         subjects.router,

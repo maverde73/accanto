@@ -42,7 +42,13 @@ async def authenticated_device(
     device credentials.
     """
     token = _bearer(authorization)
-    stmt = select(Device).where(Device.auth_token_hash == hash_token(token))
+    # A device row exists before it pairs, with a null token hash. Matching on
+    # null would let an empty bearer authenticate as an unpaired device.
+    stmt = (
+        select(Device)
+        .where(Device.auth_token_hash.is_not(None))
+        .where(Device.auth_token_hash == hash_token(token))
+    )
     device = (await session.execute(stmt)).scalars().first()
     if device is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown device token")

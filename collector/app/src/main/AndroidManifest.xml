@@ -45,10 +45,11 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- Health Connect: read-only, and only what the presence model needs. -->
+    <!-- Health Connect: read-only, and only what the presence model actually
+         consumes. Sleep is deliberately absent, because asking for it would be
+         a permission the subject grants for nothing. -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_SLEEP" />
 
     <queries>
         <!-- Mi Fitness, so the collector can launch it to force a sync. -->
@@ -74,13 +75,13 @@
             </intent-filter>
         </activity>
 
-        <!-- health, not location: the service runs continuously to gather
-             presence, and switches to precise GPS only while a caregiver is
-             actually watching the map. -->
+        <!-- Both types are required. `health` is what the service is for, but
+             it also requests location updates while in the background, and
+             Android 14+ refuses that without the `location` type declared. -->
         <service
             android:name=".collect.CollectorService"
             android:exported="false"
-            android:foregroundServiceType="health" />
+            android:foregroundServiceType="health|location" />
 
         <receiver
             android:name=".collect.BootReceiver"
