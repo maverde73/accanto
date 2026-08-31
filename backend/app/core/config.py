@@ -39,6 +39,16 @@ class Settings(BaseSettings):
 
     fcm_credentials_path: str | None = None
 
+    stun_urls: str = "stun:stun.l.google.com:19302"
+    """Public STUN is enough to discover a peer's address. It is not enough when
+    both ends sit behind restrictive NAT, which is what TURN below is for."""
+
+    turn_url: str | None = None
+    turn_username: str | None = None
+    turn_credential: str | None = None
+    """Optional relay. Without it some networks simply cannot connect; with both
+    peers on the same home network, STUN alone usually suffices."""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

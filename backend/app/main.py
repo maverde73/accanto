@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     alerts,
+    audio,
     auth,
     checkins,
     commands,
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
         checkins.router,
         location.router,
         alerts.router,
+        audio.router,
         grants.router,
         realtime.router,
         sse.router,
