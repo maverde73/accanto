@@ -30,6 +30,14 @@ class PairingStore(context: Context) {
         get() = prefs.getString(KEY_SUBJECT, null)
         set(value) = prefs.edit { putString(KEY_SUBJECT, value) }
 
+    /**
+     * Watermark for Health Connect reads, so a restart does not re-import hours
+     * of samples the backend has already deduplicated away.
+     */
+    var lastHealthReadMillis: Long
+        get() = prefs.getLong(KEY_LAST_HEALTH_READ, 0L)
+        set(value) = prefs.edit { putLong(KEY_LAST_HEALTH_READ, value) }
+
     val isPaired: Boolean
         get() = !deviceToken.isNullOrBlank() && !subjectId.isNullOrBlank()
 
@@ -39,5 +47,6 @@ class PairingStore(context: Context) {
         const val KEY_API_URL = "api_url"
         const val KEY_TOKEN = "device_token"
         const val KEY_SUBJECT = "subject_id"
+        const val KEY_LAST_HEALTH_READ = "last_health_read"
     }
 }
