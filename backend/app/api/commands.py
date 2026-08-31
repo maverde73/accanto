@@ -46,6 +46,7 @@ async def get_command(command_id: uuid.UUID, device: DeviceDep, commands: Comman
         signature=action.signature,
         requires_validation=is_sensitive(action.action_type),
         checkin_id=str(action.checkin_id) if action.checkin_id else None,
+        issued_by=await commands.issuer_name(action),
     )
 
 
@@ -118,6 +119,7 @@ async def list_pending(device: DeviceDep, commands: CommandDep) -> list[CommandO
     Push delivery is best-effort, and a caregiving system cannot depend on it.
     """
     actions = await commands.pending_for_subject(device.subject_id)
+    issuers = {a.id: await commands.issuer_name(a) for a in actions}
     return [
         CommandOut(
             command_id=str(a.id),
@@ -130,6 +132,7 @@ async def list_pending(device: DeviceDep, commands: CommandDep) -> list[CommandO
             signature=a.signature,
             requires_validation=is_sensitive(a.action_type),
             checkin_id=str(a.checkin_id) if a.checkin_id else None,
+            issued_by=issuers.get(a.id),
         )
         for a in actions
         if a.status == CommandStatus.SENT.value

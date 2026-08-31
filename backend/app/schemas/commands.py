@@ -59,6 +59,11 @@ class CommandOut(BaseModel):
     progress against it twice, which is what makes the caregiver's answer
     arrive in two stages instead of one long wait."""
 
+    issued_by: str | None = None
+    """Who asked for this. The phone says the name aloud before opening an audio
+    channel: an announcement that does not name anyone is barely an
+    announcement, and the subject is entitled to know who is in the room."""
+
 
 class CommandAckIn(BaseModel):
     model_config = ConfigDict(extra="forbid")

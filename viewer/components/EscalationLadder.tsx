@@ -21,6 +21,8 @@ interface Rung {
   /** Declared but not yet built. Offering a button that always fails would
    *  tell the caregiver something happened when nothing did. */
   unavailable?: boolean;
+  /** Carries a spoken message, so the caregiver writes it before sending. */
+  needsMessage?: boolean;
 }
 
 const RUNGS: Rung[] = [
@@ -51,10 +53,23 @@ const RUNGS: Rung[] = [
   },
   {
     rung: 5,
-    actionType: "audio_channel",
-    title: "Apri un canale audio",
+    actionType: "audio_out",
+    title: "Parla dal suo telefono",
     effect:
-      "Il telefono annuncia ad alta voce chi sta aprendo il canale, poi attiva il microfono. Nessun ascolto silenzioso.",
+      "Il telefono pronuncia ad alta voce il tuo nome e il tuo messaggio, superando la " +
+      "modalità silenziosa. Non richiede nulla da lei: è l'unico gradino che funziona " +
+      "anche se non riesce a raggiungere il telefono.",
+    scope: "escalation:audio",
+    tone: "red",
+    needsMessage: true,
+  },
+  {
+    rung: 5,
+    actionType: "audio_channel",
+    title: "Ascolta l'ambiente",
+    effect:
+      "Richiederebbe un canale audio bidirezionale, annunciato ad alta voce prima di " +
+      "attivare il microfono. Non ancora realizzato.",
     scope: "escalation:audio",
     tone: "red",
     unavailable: true,
@@ -89,16 +104,18 @@ export function EscalationLadder({
   scopes: string[];
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState("Ciao, sono qui. Fammi sapere se stai bene.");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function invoke(rung: Rung) {
     setBusy(rung.actionType);
     setResult(null);
+    const params = rung.needsMessage ? { message: message.trim() } : {};
 
     const response = await fetch(`/api/escalate?subject=${encodeURIComponent(subjectId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action_type: rung.actionType, params: {} }),
+      body: JSON.stringify({ action_type: rung.actionType, params }),
     });
 
     if (!response.ok) {
@@ -155,10 +172,33 @@ export function EscalationLadder({
             >
               {rung.effect}
             </p>
+            {rung.needsMessage && allowed ? (
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={2}
+                placeholder="Cosa vuoi che dica il telefono"
+                style={{
+                  width: "100%",
+                  marginBottom: 10,
+                  padding: 10,
+                  borderRadius: 12,
+                  border: "1px solid rgba(35,42,38,0.16)",
+                  fontFamily: "inherit",
+                  fontSize: 14,
+                  resize: "vertical",
+                }}
+              />
+            ) : null}
             <button
               className="btn btn-secondary"
               style={{ height: 42 }}
-              disabled={!allowed || rung.unavailable || busy !== null}
+              disabled={
+                !allowed ||
+                rung.unavailable ||
+                busy !== null ||
+                (rung.needsMessage && message.trim().length === 0)
+              }
               onClick={() => invoke(rung)}
             >
               {rung.unavailable

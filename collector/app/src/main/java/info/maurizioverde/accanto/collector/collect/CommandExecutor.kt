@@ -41,6 +41,8 @@ class CommandExecutor(
     private val onLiveLocation: (Boolean) -> Unit,
 ) {
 
+    private val speaker = Speaker(context)
+
     suspend fun execute(command: CommandDto) {
         Log.i(TAG, "executing ${command.type} (rung ${command.rung})")
 
@@ -70,12 +72,33 @@ class CommandExecutor(
                     message(command, "Tutto bene?"),
                 )
             }
-            "audio_out", "audio_channel" -> {
-                // Not implemented, and deliberately not disguised. Sending a
-                // rung-3 nudge instead made the loudest rung indistinguishable
-                // from the quietest, and told the caregiver something had
-                // happened that had not. An honest failure is more useful.
-                ack(command, "failed", detail = "canale audio non ancora implementato")
+            "audio_out" -> {
+                val spoken = speaker.announce(
+                    from = command.issuedBy,
+                    message = message(command, "Qualcuno vuole sapere come stai."),
+                )
+                // A notification alongside the voice, so the message leaves a
+                // trace the subject can re-read. Speech that has finished is
+                // gone, and being spoken to by a phone with nothing to show for
+                // it afterwards is unsettling.
+                Escalation.nudge(
+                    context,
+                    command.commandId,
+                    message(command, "Qualcuno vuole sapere come stai."),
+                )
+                ack(
+                    command,
+                    if (spoken) "executed" else "failed",
+                    detail = if (spoken) null else "sintesi vocale non disponibile",
+                )
+            }
+
+            "audio_channel" -> {
+                // Two-way audio needs a media path (WebRTC and a relay) that
+                // does not exist yet. Declared unavailable rather than quietly
+                // downgraded to something quieter, which once made the loudest
+                // rung indistinguishable from the softest.
+                ack(command, "failed", detail = "canale audio bidirezionale non implementato")
             }
             else -> {
                 Log.w(TAG, "unknown command type ${command.type}")

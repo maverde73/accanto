@@ -70,6 +70,8 @@ data class CommandDto(
      *  push payload alone -- this response is the authority. */
     @SerialName("requires_validation") val requiresValidation: Boolean,
     @SerialName("checkin_id") val checkinId: String? = null,
+    /** Announced aloud before speaking: the subject is told who is talking. */
+    @SerialName("issued_by") val issuedBy: String? = null,
 )
 
 @Serializable

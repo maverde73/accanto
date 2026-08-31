@@ -130,6 +130,13 @@ class CommandService:
             return None
         return action
 
+    async def issuer_name(self, action: EscalationAction) -> str | None:
+        """Display name of whoever asked, for the phone to announce aloud."""
+        from app.models.identity import AppUser  # noqa: PLC0415
+
+        user = await self._session.get(AppUser, action.triggered_by_user_id)
+        return user.display_name if user else None
+
     async def pending_for_subject(self, subject_id: uuid.UUID) -> list[EscalationAction]:
         """Unexecuted, unexpired commands the collector still owes us.
 
