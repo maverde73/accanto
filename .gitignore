@@ -45,3 +45,5 @@ local.properties
 .gradle/
 build/
 captures/
+.cxx/
+.kotlin/

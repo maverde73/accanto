@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Accanto</string>
+
+    <string name="channel_service">Servizio in funzione</string>
+    <string name="channel_service_description">Notifica permanente che tiene attivo Accanto. Senza, il telefono sospende l\'app e i dati smettono di arrivare.</string>
+
+    <string name="channel_contact">Richieste di contatto</string>
+    <string name="channel_contact_description">Avvisi discreti quando qualcuno vuole sapere come stai. L\'orologio li ripete al polso.</string>
+
+    <string name="channel_alarm">Richieste urgenti</string>
+    <string name="channel_alarm_description">Suono e schermata a tutto schermo quando serve una tua conferma. Supera la modalità silenziosa.</string>
+
+    <string name="home_greeting">Ciao</string>
+    <string name="home_all_good">Tutto funziona come dovrebbe</string>
+</resources>

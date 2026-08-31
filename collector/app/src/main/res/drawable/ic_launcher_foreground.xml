@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two forms side by side, the smaller one held. Vector rather than a bitmap
+     so the project carries no binary assets. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#4A6B5C"
+        android:pathData="M46,34m-9,0a9,9 0 1,0 18,0a9,9 0 1,0 -18,0" />
+    <path
+        android:fillColor="#4A6B5C"
+        android:pathData="M46,46c-8,0 -13,5 -13,12v16h26v-16c0,-7 -5,-12 -13,-12z" />
+    <path
+        android:fillColor="#A8763A"
+        android:pathData="M68,44m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0" />
+    <path
+        android:fillColor="#A8763A"
+        android:pathData="M68,52c-5,0 -8,3 -8,8v14h16v-14c0,-5 -3,-8 -8,-8z" />
+</vector>

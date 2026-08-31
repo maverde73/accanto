@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tokens from design/accanto-mobile.dc.html. -->
+<resources>
+    <color name="app_background">#F7F5F1</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="ink">#232A26</color>
+    <color name="ink_secondary">#5C584D</color>
+    <color name="ink_muted">#8A8578</color>
+    <color name="ink_faint">#9B9686</color>
+    <color name="green">#4A6B5C</color>
+    <color name="amber">#A8763A</color>
+    <color name="grey">#9B9686</color>
+    <color name="red">#A4503F</color>
+</resources>
