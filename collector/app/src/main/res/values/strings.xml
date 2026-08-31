@@ -13,4 +13,9 @@
 
     <string name="home_greeting">Ciao</string>
     <string name="home_all_good">Tutto funziona come dovrebbe</string>
+
+    <string name="service_running">Attivo. Tutto funziona come dovrebbe.</string>
+    <!-- Shown when something has been revoked. The subject is the only one who
+         can fix it, so the notification names exactly what is missing. -->
+    <string name="service_degraded">Attenzione: manca %1$s. Alcuni dati non vengono più raccolti.</string>
 </resources>

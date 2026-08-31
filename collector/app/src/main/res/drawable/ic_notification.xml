@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome by requirement: the status bar tints it and any colour is lost. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,3a3,3 0 1,1 0,6a3,3 0 0,1 0,-6z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,10.5c-3.3,0 -5.5,2 -5.5,4.8V21h11v-5.7c0,-2.8 -2.2,-4.8 -5.5,-4.8z" />
+</vector>
