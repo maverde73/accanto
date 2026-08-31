@@ -121,9 +121,22 @@ class CommandExecutor(
             graph.uploader.drain()
         }
 
-        report(command, partial = false, bpm = fresh?.bpm)
-        ack(command, if (fresh != null) "executed" else "failed",
-            detail = if (fresh == null) "nessun battito fresco entro il timeout" else null)
+        report(command, partial = false, bpm = fresh?.bpm, bpmAt = fresh?.epochMillis)
+        ack(
+            command,
+            if (fresh != null) "executed" else "failed",
+            detail = if (fresh == null) {
+                // Distinguish "the sync failed" from "the watch simply has no
+                // recent reading" -- only the first is a fault in this app.
+                if (health.isAvailable && health.hasPermissions()) {
+                    "nessun battito recente disponibile dall'orologio"
+                } else {
+                    "permessi Health Connect mancanti"
+                }
+            } else {
+                null
+            },
+        )
     }
 
     private fun launchMiFitness(): Boolean {
@@ -137,20 +150,45 @@ class CommandExecutor(
             }
     }
 
+    /**
+     * The most recent reading the watch will give up, after forcing a sync.
+     *
+     * Always returns the latest one there is, however old. Two earlier versions
+     * of this got it wrong by demanding freshness -- first three minutes, then
+     * twenty -- and returned nothing while a perfectly readable number sat in
+     * Health Connect unused.
+     *
+     * Withholding it was the app deciding for the caregiver. "72, two hours ago"
+     * is information they can weigh; "no data" is not, and it is also
+     * indistinguishable from a broken pipeline. The age travels with the value
+     * and the freshness rules still decide whether it counts as evidence of
+     * presence -- that judgement belongs there, not here.
+     */
     private suspend fun awaitFreshHeartRate(since: Long): HealthMapping.HeartRateSample? {
         if (!health.isAvailable || !health.hasPermissions()) return null
 
         val deadline = System.currentTimeMillis() + SYNC_TIMEOUT_MILLIS
+        var best: HealthMapping.HeartRateSample? = null
+
         while (System.currentTimeMillis() < deadline) {
             delay(POLL_INTERVAL_MILLIS)
+
             val samples = health.heartRate(
-                Instant.ofEpochMilli(since - FRESHNESS_GRACE_MILLIS),
+                Instant.ofEpochMilli(
+                    System.currentTimeMillis() - HealthConnectReader.MAX_LOOKBACK_MILLIS,
+                ),
                 Instant.now(),
             )
             val newest = samples.maxByOrNull { it.epochMillis }
-            if (newest != null && newest.epochMillis >= since - FRESHNESS_GRACE_MILLIS) return newest
+            if (newest != null && (best == null || newest.epochMillis > best.epochMillis)) {
+                best = newest
+            }
+
+            // Anything newer than the request is certainly the result of the
+            // sync we just forced; stop early rather than burn the full timeout.
+            if (newest != null && newest.epochMillis >= since) return newest
         }
-        return null
+        return best
     }
 
     // ---------------------------------------------------------------- helpers
@@ -161,12 +199,20 @@ class CommandExecutor(
         put("reason", JsonPrimitive("checkin"))
     }
 
-    private suspend fun report(command: CommandDto, partial: Boolean, bpm: Int?) {
+    private suspend fun report(
+        command: CommandDto,
+        partial: Boolean,
+        bpm: Int?,
+        bpmAt: Long? = null,
+    ) {
         val checkinId = command.checkinId ?: return
         val result = buildJsonObject {
             put("battery_pct", JsonPrimitive(signals.batteryPercent()))
             put("watch_bt_connected", JsonPrimitive(signals.watchConnected()))
             if (bpm != null) put("bpm", JsonPrimitive(bpm))
+            // The age matters as much as the number: a caregiver can weigh "72,
+            // six minutes ago", but not a bare 72 of unknown vintage.
+            if (bpmAt != null) put("bpm_at", JsonPrimitive(Timestamps.isoOffset(bpmAt)))
         }
         graph.api.reportCheckin(checkinId, CheckinReportDto(partial = partial, result = result))
     }
@@ -208,7 +254,7 @@ class CommandExecutor(
         const val SYNC_TIMEOUT_MILLIS = 90_000L
         const val POLL_INTERVAL_MILLIS = 5_000L
 
-        /** Mi Fitness may deliver a sample taken slightly before the request. */
-        const val FRESHNESS_GRACE_MILLIS = 3 * 60_000L
+        // No maximum age. Whatever the watch last recorded is reported, with its
+        // timestamp, and the reader decides what it is worth.
     }
 }

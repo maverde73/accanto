@@ -120,15 +120,17 @@ export function clockRows(snapshot: Snapshot, now: Date = new Date()): ClockRow[
     {
       key: "vital",
       tierLabel: "Segni vitali",
-      // Three distinct situations, easily conflated: nothing ever arrived; a
-      // heartbeat was seen but the value is withheld by scope; the value is
-      // visible. Only the last two may claim a heartbeat was detected.
+      // The last known value is always shown, however old, alongside its age.
+      // Hiding a reading for being stale is the app deciding for the caregiver:
+      // "68, two hours ago" is something they can weigh, and it is also how
+      // they tell a quiet watch from a broken pipeline. Whether it counts as
+      // evidence of presence is a separate question, answered by the tone.
       title:
-        clocks.vital === null
-          ? "Nessun battito ricevuto"
-          : vitals.bpm === null
+        vitals.bpm !== null
+          ? `Battito ${vitals.bpm}`
+          : clocks.vital !== null
             ? "Battito rilevato"
-            : `Battito ${vitals.bpm}`,
+            : "Nessun battito ricevuto",
       at: clocks.vital,
       tone: freshTone(clocks.vital, FRESH_MINUTES.vital, now),
       note: batteries.watch_likely_charging ? "Orologio probabilmente in carica" : null,

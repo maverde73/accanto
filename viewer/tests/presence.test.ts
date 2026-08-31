@@ -169,6 +169,21 @@ describe("clockRows", () => {
     expect(rows[2]?.at).not.toBeNull();
   });
 
+  it("still shows a heart rate that is hours old", () => {
+    // Withholding it would be the app deciding for the caregiver. The value
+    // carries its age, and the grey tone says it is no longer evidence.
+    const rows = clockRows(
+      snapshot({
+        clocks: { interaction: iso(200), movement: null, vital: iso(180), contact: iso(1) },
+        vitals: { bpm: 68, bpm_at: iso(180) },
+      }),
+      NOW,
+    );
+    expect(rows[2]?.title).toBe("Battito 68");
+    expect(rows[2]?.at).not.toBeNull();
+    expect(rows[2]?.tone).toBe("grey");
+  });
+
   it("flags a probable charge on the vitals row", () => {
     const rows = clockRows(
       snapshot({ batteries: { phone_pct: 88, watch_likely_charging: true } }),
