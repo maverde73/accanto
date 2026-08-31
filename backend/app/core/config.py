@@ -43,11 +43,22 @@ class Settings(BaseSettings):
     """Public STUN is enough to discover a peer's address. It is not enough when
     both ends sit behind restrictive NAT, which is what TURN below is for."""
 
+    # A relay, so a call works when both peers are behind restrictive NAT.
+    # Three ways to configure one, in order of preference.
+    cloudflare_turn_key_id: str | None = None
+    cloudflare_turn_token: str | None = None
+    """Cloudflare mints short-lived credentials per call. Preferred: no
+    long-lived secret ever reaches a client."""
+
     turn_url: str | None = None
+    turn_shared_secret: str | None = None
+    """Self-hosted coturn using the REST shared-secret scheme, which also yields
+    per-call credentials."""
+
     turn_username: str | None = None
     turn_credential: str | None = None
-    """Optional relay. Without it some networks simply cannot connect; with both
-    peers on the same home network, STUN alone usually suffices."""
+    """Static credentials. Workable, but the same secret reaches every client
+    and never expires."""
 
     @field_validator("cors_origins", mode="before")
     @classmethod

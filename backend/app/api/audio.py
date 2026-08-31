@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.deps import CommandDep, DeviceDep, SessionDep, UserDep, require_scope
-from app.core.config import get_settings
+from app.services.turn import ice_servers
 from app.domain.commands import CommandType
 from app.domain.scopes import Scope
 from app.models.audio import AudioSession, AudioSignal
@@ -56,18 +56,7 @@ class SignalOut(BaseModel):
     payload: str
 
 
-def _ice_servers() -> list[dict]:
-    settings = get_settings()
-    servers: list[dict] = [{"urls": settings.stun_urls}]
-    if settings.turn_url and settings.turn_username and settings.turn_credential:
-        servers.append(
-            {
-                "urls": settings.turn_url,
-                "username": settings.turn_username,
-                "credential": settings.turn_credential,
-            }
-        )
-    return servers
+
 
 
 async def _live_session(session_id: uuid.UUID, db: SessionDep) -> AudioSession:
@@ -114,13 +103,13 @@ async def open_session(
             target=str(audio.id),
         )
     )
-    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=_ice_servers())
+    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=await ice_servers())
 
 
 @router.get("/audio/{session_id}", response_model=SessionOut)
 async def read_session(session_id: uuid.UUID, user: UserDep, db: SessionDep) -> SessionOut:
     audio = await _live_session(session_id, db)
-    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=_ice_servers())
+    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=await ice_servers())
 
 
 @router.get("/audio/{session_id}/device", response_model=SessionOut)
@@ -130,7 +119,7 @@ async def read_session_as_device(
     audio = await _live_session(session_id, db)
     if audio.subject_id != device.subject_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
-    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=_ice_servers())
+    return SessionOut(session_id=str(audio.id), status=audio.status, ice_servers=await ice_servers())
 
 
 @router.post("/audio/{session_id}/signal/{sender}", status_code=204)

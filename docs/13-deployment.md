@@ -162,6 +162,53 @@ Se in futuro lo stream dovesse chiudersi a intervalli regolari, il sospetto
 principale è un timeout di inattività: la cura è abbassare il keepalive, non
 allungare i timeout.
 
+## Audio bidirezionale: serve un TURN
+
+Il tunnel **non inoltra UDP**, quindi non può fare da relay per WebRTC. Con il
+solo STUN la chiamata riesce quando almeno uno dei due capi è raggiungibile
+direttamente — tipicamente se sono sulla stessa rete di casa — e fallisce
+quando entrambi sono dietro NAT restrittivi, cioè lo scenario che conta di più:
+telefono su rete mobile, caregiver altrove.
+
+Il backend genera **credenziali effimere per ogni chiamata**: nessun segreto di
+lunga durata raggiunge mai un client. Tre modi di configurarlo, in ordine di
+preferenza.
+
+### Cloudflare (consigliato: hai già l'account)
+
+Dashboard Cloudflare → **Realtime** → **TURN** → crea una chiave. Ottieni un
+*Key ID* e un *API token*.
+
+```bash
+ACCANTO_CLOUDFLARE_TURN_KEY_ID=<key id>
+ACCANTO_CLOUDFLARE_TURN_TOKEN=<api token>
+```
+
+### coturn su un VPS, con segreto condiviso
+
+```bash
+ACCANTO_TURN_URL=turn:turn.tuodominio.it:3478
+ACCANTO_TURN_SHARED_SECRET=<segreto>
+```
+
+Nel `turnserver.conf`: `use-auth-secret`, `static-auth-secret=<lo stesso>`,
+`realm=tuodominio.it`. Servono le porte UDP 3478 e l'intervallo di relay
+raggiungibili da internet — quindi **non** dietro il tunnel.
+
+### Credenziali statiche
+
+```bash
+ACCANTO_TURN_URL=turn:...
+ACCANTO_TURN_USERNAME=...
+ACCANTO_TURN_CREDENTIAL=...
+```
+
+Funziona, ma lo stesso segreto raggiunge ogni client e non scade. Ultima scelta.
+
+> Se il relay non risponde, il backend **degrada a STUN** e lo registra, invece
+> di far fallire la chiamata: una chiamata che funziona su molte reti è meglio
+> di nessuna chiamata.
+
 ## Trappole incontrate davvero
 
 **Il certificato dell'account `cloudflared` vale per una zona sola.**
