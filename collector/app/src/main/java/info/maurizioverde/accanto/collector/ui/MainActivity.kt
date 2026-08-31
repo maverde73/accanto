@@ -114,5 +114,7 @@ private fun HomeScreen(subjectName: String) {
         PermissionScreen(state = permissions) {
             permissions = Permissions.inspect(context)
         }
+
+        ServerRow()
     }
 }

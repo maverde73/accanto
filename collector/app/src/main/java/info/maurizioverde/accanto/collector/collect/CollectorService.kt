@@ -271,13 +271,19 @@ class CollectorService : Service() {
 
     private suspend fun readHealth(subjectId: String) {
         val now = System.currentTimeMillis()
-        val since = maxOf(
-            graph.pairing.lastHealthReadMillis,
-            now - HealthConnectReader.MAX_LOOKBACK_MILLIS,
-        )
-        if (now <= since) return
 
-        val from = Instant.ofEpochMilli(since)
+        // Always re-scan a wide window, never "since the last read".
+        //
+        // Health Connect receives this data retroactively: Mi Fitness syncs
+        // with the watch and inserts samples carrying their original
+        // timestamps, often minutes old. A watermark on sample time therefore
+        // misses everything that arrives late -- which, with this sync model,
+        // is all of it. With the watch sampling every ten minutes and the poll
+        // running every three, the window never once contained a reading.
+        //
+        // Re-reading is free: ingest is idempotent on the dedup key, so a
+        // sample already sent is recognised and discarded server-side.
+        val from = Instant.ofEpochMilli(now - HealthConnectReader.MAX_LOOKBACK_MILLIS)
         val to = Instant.ofEpochMilli(now)
 
         for (sample in health.heartRate(from, to)) {
@@ -304,6 +310,7 @@ class CollectorService : Service() {
             )
         }
 
+        // Recorded for diagnostics only; the window no longer depends on it.
         graph.pairing.lastHealthReadMillis = now
     }
 

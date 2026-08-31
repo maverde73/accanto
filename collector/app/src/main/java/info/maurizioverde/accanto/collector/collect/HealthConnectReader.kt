@@ -67,7 +67,16 @@ class HealthConnectReader(private val context: Context) {
                     )
                 }
             }
-            HealthMapping.thin(samples)
+            val kept = HealthMapping.thin(samples)
+            // Logged even when empty. "Nothing arrived" and "nothing was asked
+            // for" look identical from outside, and telling them apart is the
+            // whole difficulty when a health pipeline stays silent.
+            Log.i(
+                TAG,
+                "heart rate: ${response.records.size} record, ${samples.size} campioni, " +
+                    "${kept.size} dopo il filtro, finestra $since..$until",
+            )
+            kept
         }.getOrElse {
             Log.w(TAG, "heart rate read failed", it)
             emptyList()
@@ -83,7 +92,7 @@ class HealthConnectReader(private val context: Context) {
                     timeRangeFilter = TimeRangeFilter.between(since, until),
                 ),
             )
-            HealthMapping.movementBuckets(
+            val buckets = HealthMapping.movementBuckets(
                 response.records.map {
                     HealthMapping.StepsBucket(
                         startMillis = it.startTime.toEpochMilli(),
@@ -92,6 +101,8 @@ class HealthConnectReader(private val context: Context) {
                     )
                 },
             )
+            Log.i(TAG, "passi: ${response.records.size} record, ${buckets.size} con movimento")
+            buckets
         }.getOrElse {
             Log.w(TAG, "steps read failed", it)
             emptyList()
