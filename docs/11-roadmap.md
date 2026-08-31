@@ -82,7 +82,45 @@ fresco e posizione, e la persona compare sulla mappa.
 - Consapevolezza notte/giorno completa nelle finestre e negli alert
 - Hardening: rate limit, cifratura colonna vitali, osservabilità
 
-## Fase 4 — (Opzionale, da valutare) BLE diretto
+## Fase 4a — Anello con protocollo BLE aperto (la strada preferibile)
+
+Misurato che il ponte Xiaomi non pubblica nulla (vedi
+[`02-device-constraints.md`](02-device-constraints.md)), la via più promettente
+per la frequenza cardiaca non è forzare quel ponte ma **cambiare sorgente**.
+
+Gli anelli economici tipo **Colmi R02/R03/R06** (25-35 €) espongono un BLE
+**senza cifratura né pairing key**, con client open source già esistenti
+(`tahnok/colmi_r02_client` documenta il protocollo GATT completo, Gadgetbridge
+ha un dissettore Wireshark).
+
+**Perché si adatta bene qui, a differenza del BLE sul watch:**
+
+- Nessuna app intermediaria da cui dipendiamo, quindi **nessuna connessione da
+  rubare** — l'obiezione principale al BLE sul Redmi non si applica
+- Battito **in tempo reale**, non a batch
+- Il backend **non cambia di una riga**: accetta già eventi `hr` da qualunque
+  `source`, e il modello a tier è indifferente alla provenienza
+- Nel collector è una sorgente in più accanto a quelle esistenti, che scrive
+  nella stessa outbox
+
+**Da verificare prima di acquistare:**
+
+- che il modello esatto sia fra quelli supportati dalle librerie (i cloni
+  rimarchiati cambiano chipset)
+- autonomia reale e tempi di ricarica: i vuoti in carica ricadono
+  nell'inferenza già implementata
+- comportamento del BLE da un foreground service Android su tempi lunghi
+
+**Da mettere in conto, e da dire alla persona monitorata:** un BLE senza
+autenticazione significa che l'anello è leggibile da **chiunque si trovi nel
+raggio**. Per un prodotto che tratta dati sanitari va dichiarato, non taciuto.
+
+**Qualità del dato:** un PPG da 30 € non è di grado clinico. Per la presenza
+("è viva, il polso c'è") è adeguato; per qualunque uso che somigli a una
+valutazione medica, no. Il progetto non è un dispositivo medico e questo non lo
+cambia.
+
+## Fase 4b — (Opzionale, sconsigliata) BLE diretto al watch
 
 Solo se le verifiche mostrano che Health Connect non basta per un requisito reale
 (es. latenza inaccettabile anche col sync forzato).

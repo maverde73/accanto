@@ -106,6 +106,48 @@ possibile una risposta **progressiva** (vedi [`03`](03-liveness-model.md) e
 | GPS del watch | Non disponibile live; il telefono lo sostituisce meglio |
 | Accelerometro del watch (cadute) | Non esposto da nessuna via |
 
+## Il ponte Mi Fitness non pubblica nulla — misurato
+
+**Health Connect resta vuoto.** Non è una limitazione sul battito: Mi Fitness non
+scrive **alcun** tipo di dato.
+
+Survey eseguito dal collector sul dispositivo reale, 15 tipi su 7 giorni:
+
+| Tipo | Record da Mi Fitness |
+|------|----------------------|
+| Battito, battito a riposo, variabilità HR | 0 |
+| Passi, cadenza, distanza, velocità | 0 |
+| Dislivello, piani saliti | 0 |
+| Calorie attive e totali | 0 |
+| Sonno, allenamenti | 0 |
+| SpO2, frequenza respiratoria | 0 |
+
+L'unico dato presente erano 5 record di passi del **contapassi del telefono**
+(`com.android.healthconnect.phone.*`), non dell'orologio. Registrare l'origine e
+non solo il conteggio è ciò che lo ha rivelato: prima erano stati attribuiti
+all'orologio.
+
+Verificato che i permessi non c'entrano: Mi Fitness ha `WRITE_HEART_RATE` e
+`WRITE_STEPS` concessi, Accanto ha i corrispondenti `READ`, e nella schermata
+"Autorizzazione dati" di Mi Fitness il collegamento risulta attivo. È autorizzato
+e inerte.
+
+### Alternative valutate, tutte chiuse
+
+| Strada | Esito | Come verificato |
+|--------|-------|-----------------|
+| Health Sync e app ponte | leggerebbero da un Health Connect vuoto | ragionamento sulla catena |
+| Cloud bridge Xiaomi (`mi_fitness_data_bridge`) | solo regione Cina, nessuna configurazione di regione; richiede credenziali dell'intero account | letto nel repository |
+| Database locale di Mi Fitness | irraggiungibile: no root, `run-as` rifiutato, `ALLOW_BACKUP` assente | provato sul dispositivo |
+| Export ufficiale GDPR | funziona, ma solo storico scaricato a mano | documentato da Xiaomi |
+| SDK Vela / quick app | IDE solo Windows, distribuzione a firma controllata, supporto al modello ignoto; e i dati dovrebbero comunque tornare indietro passando per l'infrastruttura Xiaomi | documentazione Xiaomi |
+| BLE diretto al watch | ruba l'unica connessione a Mi Fitness, si rompe a ogni firmware | valutazione, fase 4 |
+
+**Conclusione:** su questo hardware la frequenza cardiaca non è ottenibile in
+tempo reale. Il modello di presenza regge lo stesso, perché il battito è Tier C —
+prova che una persona è viva, non che stia bene — e i segnali che valgono di più
+vengono tutti dal telefono.
+
 ## Conseguenza di progetto
 
 Il watch fornisce **battito e sonno a batch**; tutto il resto — real-time,

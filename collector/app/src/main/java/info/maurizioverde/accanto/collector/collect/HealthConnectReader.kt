@@ -4,12 +4,27 @@ import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ElevationGainedRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.FloorsClimbedRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.records.RespiratoryRateRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.SpeedRecord
+import androidx.health.connect.client.records.StepsCadenceRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import info.maurizioverde.accanto.collector.domain.HealthMapping
 import java.time.Instant
+import kotlin.reflect.KClass
 
 /**
  * Reads what Mi Fitness has written into Health Connect.
@@ -119,36 +134,59 @@ class HealthConnectReader(private val context: Context) {
      * completely different causes.
      */
     suspend fun survey(days: Long = 7) {
-        if (!isAvailable || !hasPermissions()) {
-            Log.i(TAG, "survey: Health Connect non disponibile o senza permessi")
+        val active = client
+        if (active == null) {
+            Log.i(TAG, "survey: Health Connect non disponibile")
             return
         }
+
         val until = Instant.now()
         val since = until.minusSeconds(days * 24 * 3600)
+        val range = TimeRangeFilter.between(since, until)
 
-        val hr = runCatching {
-            client!!.readRecords(
-                ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(since, until)),
-            ).records
-        }.getOrElse { emptyList() }
-
-        val steps = runCatching {
-            client!!.readRecords(
-                ReadRecordsRequest(StepsRecord::class, TimeRangeFilter.between(since, until)),
-            ).records
-        }.getOrElse { emptyList() }
-
-        Log.i(
-            TAG,
-            "survey $days giorni -> battito: ${hr.size} record " +
-                "(${hr.sumOf { it.samples.size }} campioni), passi: ${steps.size} record",
+        // Every type Mi Fitness declares it can write, plus a few the phone
+        // itself might supply. Reported per type, with the writing package,
+        // because a count alone once led to attributing the phone's own step
+        // counter to the watch.
+        val types: List<Pair<String, KClass<out Record>>> = listOf(
+            "battito" to HeartRateRecord::class,
+            "battito a riposo" to RestingHeartRateRecord::class,
+            "variabilità HR" to HeartRateVariabilityRmssdRecord::class,
+            "passi" to StepsRecord::class,
+            "cadenza passi" to StepsCadenceRecord::class,
+            "distanza" to DistanceRecord::class,
+            "velocità" to SpeedRecord::class,
+            "dislivello" to ElevationGainedRecord::class,
+            "piani saliti" to FloorsClimbedRecord::class,
+            "calorie attive" to ActiveCaloriesBurnedRecord::class,
+            "calorie totali" to TotalCaloriesBurnedRecord::class,
+            "sonno" to SleepSessionRecord::class,
+            "allenamenti" to ExerciseSessionRecord::class,
+            "ossigeno (SpO2)" to OxygenSaturationRecord::class,
+            "frequenza respiratoria" to RespiratoryRateRecord::class,
         )
-        hr.take(3).forEach { r ->
-            Log.i(TAG, "  battito da ${r.metadata.dataOrigin.packageName} @ ${r.startTime}")
+
+        Log.i(TAG, "===== SURVEY Health Connect, ultimi $days giorni =====")
+        for ((label, type) in types) {
+            val outcome = runCatching {
+                active.readRecords(ReadRecordsRequest(type, range)).records
+            }
+            outcome.fold(
+                onSuccess = { records ->
+                    if (records.isEmpty()) {
+                        Log.i(TAG, "  %-24s vuoto".format(label))
+                    } else {
+                        val origins = records
+                            .map { it.metadata.dataOrigin.packageName }
+                            .groupingBy { it }.eachCount()
+                            .entries.joinToString(", ") { "${it.key} x${it.value}" }
+                        Log.i(TAG, "  %-24s %d record  <- %s".format(label, records.size, origins))
+                    }
+                },
+                onFailure = { Log.i(TAG, "  %-24s non leggibile (%s)".format(label, it.javaClass.simpleName)) },
+            )
         }
-        steps.take(3).forEach { r ->
-            Log.i(TAG, "  passi da ${r.metadata.dataOrigin.packageName} @ ${r.startTime}")
-        }
+        Log.i(TAG, "===== fine survey =====")
     }
 
     companion object {
