@@ -74,6 +74,9 @@ class ApiClient(
     suspend fun respondToCommand(commandId: String, response: CommandResponseDto): ApiResult<Unit> =
         postNoContent("/v1/commands/$commandId/response", response)
 
+    suspend fun reportCheckin(checkinId: String, report: CheckinReportDto): ApiResult<Unit> =
+        postNoContent("/v1/commands/checkins/$checkinId/report", report)
+
     // ----------------------------------------------------------------- plumbing
 
     private suspend inline fun <reified B, reified T> post(path: String, body: B): ApiResult<T> =

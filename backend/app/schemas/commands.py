@@ -54,6 +54,10 @@ class CommandOut(BaseModel):
     expires_at: datetime | None
     signature: str
     requires_validation: bool
+    checkin_id: str | None = None
+    """Present when the command belongs to a check-in. The collector reports
+    progress against it twice, which is what makes the caregiver's answer
+    arrive in two stages instead of one long wait."""
 
 
 class CommandAckIn(BaseModel):

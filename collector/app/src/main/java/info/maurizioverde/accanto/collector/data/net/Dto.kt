@@ -69,6 +69,7 @@ data class CommandDto(
     /** True for the rungs that seize the phone. Those are never executed from a
      *  push payload alone -- this response is the authority. */
     @SerialName("requires_validation") val requiresValidation: Boolean,
+    @SerialName("checkin_id") val checkinId: String? = null,
 )
 
 @Serializable
@@ -83,4 +84,10 @@ data class CommandResponseDto(
     val response: String,
     @SerialName("responded_at") val respondedAt: String,
     val source: String = "phone",
+)
+
+@Serializable
+data class CheckinReportDto(
+    val partial: Boolean,
+    val result: JsonObject,
 )

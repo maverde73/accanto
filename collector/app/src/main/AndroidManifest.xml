@@ -75,6 +75,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Rung 4. Shown over the lock screen: a question that waits for
+             someone to unlock their phone is not an answer to "is she well". -->
+        <activity
+            android:name=".ui.ConfirmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.Accanto" />
+
         <!-- Both types are required. `health` is what the service is for, but
              it also requests location updates while in the background, and
              Android 14+ refuses that without the `location` type declared. -->

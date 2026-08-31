@@ -43,6 +43,7 @@ async def get_command(command_id: uuid.UUID, device: DeviceDep, commands: Comman
         expires_at=action.expires_at,
         signature=action.signature,
         requires_validation=is_sensitive(action.action_type),
+        checkin_id=str(action.checkin_id) if action.checkin_id else None,
     )
 
 
@@ -113,6 +114,7 @@ async def list_pending(device: DeviceDep, commands: CommandDep) -> list[CommandO
             expires_at=a.expires_at,
             signature=a.signature,
             requires_validation=is_sensitive(a.action_type),
+            checkin_id=str(a.checkin_id) if a.checkin_id else None,
         )
         for a in actions
         if a.status == CommandStatus.SENT.value

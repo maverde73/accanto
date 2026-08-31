@@ -64,11 +64,15 @@ class CollectorService : Service() {
     private lateinit var activity: ActivitySource
     private lateinit var usage: UsageSource
     private lateinit var health: HealthConnectReader
+    private lateinit var executor: CommandExecutor
 
     private var liveModeSince: Long? = null
 
     /** False when onCreate bailed out; onDestroy must not touch uninitialised sources. */
     private var started = false
+
+    /** Commands currently executing, so a poll does not start one twice. */
+    private val inFlight = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     override fun onCreate() {
         super.onCreate()
@@ -97,9 +101,14 @@ class CollectorService : Service() {
         activity.start()
         started = true
 
+        executor = CommandExecutor(this, graph, signals, health) { enabled ->
+            if (enabled) enableLiveLocation() else disableLiveLocation()
+        }
+
         scope.launch { uploadLoop() }
         scope.launch { heartbeatLoop() }
         scope.launch { healthLoop() }
+        scope.launch { commandLoop() }
         scope.launch { catchUpOnMissedUsage() }
     }
 
@@ -108,6 +117,13 @@ class CollectorService : Service() {
         when (intent?.action) {
             ACTION_LIVE_LOCATION_ON -> enableLiveLocation()
             ACTION_LIVE_LOCATION_OFF -> disableLiveLocation()
+            ACTION_PROMPT_RESPONSE -> {
+                val commandId = intent.getStringExtra(EXTRA_COMMAND_ID)
+                val response = intent.getStringExtra(EXTRA_RESPONSE)
+                if (commandId != null && response != null) {
+                    scope.launch { executor.respondToPrompt(commandId, response) }
+                }
+            }
         }
         // Restart if the system kills us: an unattended collector that stays
         // down is worse than one that costs a little battery.
@@ -281,6 +297,50 @@ class CollectorService : Service() {
     }
 
     /**
+     * Picks up what the caregiver has asked for.
+     *
+     * Polled rather than pushed. FCM is the intended transport, but push
+     * delivery is best effort and a caregiving system cannot rest on it: the one
+     * moment it fails is the moment somebody wanted an answer. Polling is the
+     * floor beneath the push, and it is also what makes the system work with no
+     * Firebase project at all.
+     */
+    private suspend fun commandLoop() {
+        while (scope.isActive) {
+            if (graph.pairing.isPaired) {
+                when (val pending = graph.api.pendingCommands()) {
+                    is info.maurizioverde.accanto.collector.data.net.ApiResult.Ok ->
+                        for (command in pending.value) dispatch(command)
+                    else -> Unit
+                }
+            }
+            delay(COMMAND_POLL_MILLIS)
+        }
+    }
+
+    /**
+     * Runs each command on its own coroutine.
+     *
+     * A forced sync waits up to ninety seconds for the watch to deliver a fresh
+     * reading. Executed in sequence, that made a discreet nudge queue behind it
+     * -- so the quietest rung on the ladder became the slowest, which is exactly
+     * backwards. `inFlight` stops the poll from starting the same command again
+     * while it is still running.
+     */
+    private fun dispatch(command: info.maurizioverde.accanto.collector.data.net.CommandDto) {
+        if (!inFlight.add(command.commandId)) return
+        scope.launch {
+            try {
+                executor.execute(command)
+            } catch (error: Exception) {
+                Log.w(TAG, "command ${command.type} failed", error)
+            } finally {
+                inFlight.remove(command.commandId)
+            }
+        }
+    }
+
+    /**
      * Recovers the interaction the unlock broadcast could not see.
      *
      * After a reboot or a crash the service was not listening, and that gap
@@ -395,11 +455,26 @@ class CollectorService : Service() {
         private const val HEALTH_INTERVAL_MILLIS = 3 * 60_000L
         private const val USAGE_LOOKBACK_MILLIS = 12 * 60 * 60_000L
 
+        /** Short: this is the latency a caregiver feels when they press the button. */
+        private const val COMMAND_POLL_MILLIS = 10_000L
+
         const val ACTION_LIVE_LOCATION_ON = "info.maurizioverde.accanto.LIVE_ON"
         const val ACTION_LIVE_LOCATION_OFF = "info.maurizioverde.accanto.LIVE_OFF"
+        const val ACTION_PROMPT_RESPONSE = "info.maurizioverde.accanto.PROMPT_RESPONSE"
+        const val EXTRA_COMMAND_ID = "command_id"
+        const val EXTRA_RESPONSE = "response"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, CollectorService::class.java))
+        }
+
+        /** Called by the full-screen prompt when the subject answers. */
+        fun respondToPrompt(context: Context, commandId: String, response: String) {
+            val intent = Intent(context, CollectorService::class.java)
+                .setAction(ACTION_PROMPT_RESPONSE)
+                .putExtra(EXTRA_COMMAND_ID, commandId)
+                .putExtra(EXTRA_RESPONSE, response)
+            context.startForegroundService(intent)
         }
 
         fun setLiveLocation(context: Context, enabled: Boolean) {
