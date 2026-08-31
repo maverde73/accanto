@@ -147,6 +147,20 @@ describe("clockRows", () => {
     expect(clockRows(snapshot(), NOW)[2]?.title).toBe("Battito 72");
   });
 
+  it("does not claim a heartbeat that never arrived", () => {
+    // Found in the first real end-to-end run: with no watch data at all the row
+    // still read "Battito rilevato", asserting something that never happened.
+    const rows = clockRows(
+      snapshot({
+        clocks: { interaction: iso(2), movement: null, vital: null, contact: iso(1) },
+        vitals: { bpm: null, bpm_at: null },
+      }),
+      NOW,
+    );
+    expect(rows[2]?.title).toBe("Nessun battito ricevuto");
+    expect(rows[1]?.title).toBe("Nessun movimento ricevuto");
+  });
+
   it("degrades gracefully when vitals are withheld by scope", () => {
     // A caregiver without `vitals` still sees that a heartbeat was observed --
     // that is presence, not a health record.

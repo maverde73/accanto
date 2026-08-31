@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only.
+     Cleartext is permitted exclusively towards the loopback address, which with
+     `adb reverse tcp:8000 tcp:8000` is the development machine over USB. Not a
+     blanket allow: the release build has no such file, so production traffic
+     stays TLS-only and a debug convenience cannot leak into it. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <!-- The host as seen from the Android emulator. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

@@ -109,8 +109,10 @@ export function clockRows(snapshot: Snapshot, now: Date = new Date()): ClockRow[
     },
     {
       key: "movement",
+      // With no clock at all, "In movimento" would assert something that never
+      // happened. A row title has to be able to say "nothing arrived".
+      title: clocks.movement === null ? "Nessun movimento ricevuto" : "In movimento",
       tierLabel: "Movimento",
-      title: "In movimento",
       at: clocks.movement,
       tone: freshTone(clocks.movement, FRESH_MINUTES.movement, now),
       note: null,
@@ -118,7 +120,15 @@ export function clockRows(snapshot: Snapshot, now: Date = new Date()): ClockRow[
     {
       key: "vital",
       tierLabel: "Segni vitali",
-      title: vitals.bpm === null ? "Battito rilevato" : `Battito ${vitals.bpm}`,
+      // Three distinct situations, easily conflated: nothing ever arrived; a
+      // heartbeat was seen but the value is withheld by scope; the value is
+      // visible. Only the last two may claim a heartbeat was detected.
+      title:
+        clocks.vital === null
+          ? "Nessun battito ricevuto"
+          : vitals.bpm === null
+            ? "Battito rilevato"
+            : `Battito ${vitals.bpm}`,
       at: clocks.vital,
       tone: freshTone(clocks.vital, FRESH_MINUTES.vital, now),
       note: batteries.watch_likely_charging ? "Orologio probabilmente in carica" : null,

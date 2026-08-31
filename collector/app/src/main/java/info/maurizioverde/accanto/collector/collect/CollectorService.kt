@@ -67,9 +67,24 @@ class CollectorService : Service() {
 
     private var liveModeSince: Long? = null
 
+    /** False when onCreate bailed out; onDestroy must not touch uninitialised sources. */
+    private var started = false
+
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph.of(this)
+
+        val permissions = Permissions.inspect(this)
+
+        // Going foreground is the very first thing: the platform kills a service
+        // that has not called startForeground promptly. If it is refused there
+        // is nothing useful this service can do, so it stops cleanly and the
+        // dashboard tells the subject what is missing.
+        if (!startForegroundWithType(permissions)) {
+            Log.w(TAG, "cannot run without permissions: ${permissions.missing}")
+            stopSelf()
+            return
+        }
 
         signals = PhoneSignals(this) { kind, at -> record(kind, Source.PHONE, at) }
         location = LocationSource(this, ::onFix)
@@ -80,8 +95,7 @@ class CollectorService : Service() {
         signals.start()
         location.start(LocationMode.IDLE)
         activity.start()
-
-        startForegroundWithType()
+        started = true
 
         scope.launch { uploadLoop() }
         scope.launch { heartbeatLoop() }
@@ -90,6 +104,7 @@ class CollectorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!started) return START_NOT_STICKY
         when (intent?.action) {
             ACTION_LIVE_LOCATION_ON -> enableLiveLocation()
             ACTION_LIVE_LOCATION_OFF -> disableLiveLocation()
@@ -102,9 +117,11 @@ class CollectorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        signals.stop()
-        location.stop()
-        activity.stop()
+        if (started) {
+            signals.stop()
+            location.stop()
+            activity.stop()
+        }
         scope.cancel()
         super.onDestroy()
     }
@@ -303,17 +320,39 @@ class CollectorService : Service() {
 
     // ------------------------------------------------------------- notification
 
-    private fun startForegroundWithType() {
-        // Both types, matching the manifest: the service exists for health data
-        // but also drives location, and Android 14+ refuses background location
-        // from a service that has not declared it.
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        } else {
-            0
+    /**
+     * Starts in the foreground with only the types this app may currently use.
+     *
+     * Android 14+ validates each declared type against a runtime permission that
+     * backs it: `health` needs activity recognition or a health read permission,
+     * `location` needs a location permission. Claiming a type without its
+     * backing permission throws a SecurityException and kills the process.
+     *
+     * Returns false if the service cannot legally run, so the caller stops
+     * rather than the platform killing us.
+     */
+    private fun startForegroundWithType(permissions: PermissionState): Boolean {
+        var type = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            if (permissions.activityRecognition) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+            }
+            if (permissions.fineLocation) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            }
+            if (type == 0) return false
         }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(null), type)
+
+        return try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(permissions), type)
+            true
+        } catch (error: SecurityException) {
+            // Belt and braces: a permission revoked between the check and this
+            // call must degrade, never crash. The subject sees the app is broken
+            // in the dashboard; a crash loop would tell them nothing.
+            Log.e(TAG, "foreground service refused by the platform", error)
+            false
+        }
     }
 
     private fun updateNotification(permissions: PermissionState) {

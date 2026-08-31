@@ -49,7 +49,11 @@ class MainActivity : ComponentActivity() {
                             graph.pairing.subjectId = subjectId
                             subjectName = name
                             paired = true
-                            CollectorService.start(this@MainActivity)
+                            // Deliberately not started here. Android refuses a
+                            // health or location foreground service until a
+                            // backing runtime permission is held, and starting
+                            // anyway crashes the app the moment pairing
+                            // succeeds. The dashboard starts it once granted.
                         }
                     } else {
                         HomeScreen(subjectName ?: "")
@@ -71,7 +75,13 @@ private fun HomeScreen(subjectName: String) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) permissions = Permissions.inspect(context)
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissions = Permissions.inspect(context)
+                // Retry here rather than only once at pairing: the service may
+                // have been refused earlier for want of a permission that has
+                // since been granted, and the user should not have to know that.
+                if (permissions.canRunService) CollectorService.start(context)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

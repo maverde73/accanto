@@ -24,7 +24,10 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "DEFAULT_API_URL", "\"http://10.0.2.2:8000\"")
+            // Loopback, which `adb reverse tcp:8000 tcp:8000` maps to the
+            // development machine over USB. Works on a real device, unlike the
+            // emulator's 10.0.2.2.
+            buildConfigField("String", "DEFAULT_API_URL", "\"http://localhost:8000\"")
         }
         release {
             isMinifyEnabled = true

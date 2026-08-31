@@ -15,7 +15,9 @@ from app.domain.tiers import EventKind
 
 EVIDENCE_IT: dict[EventKind, str] = {
     EventKind.UNLOCK: "ha sbloccato il telefono",
-    EventKind.APP_USAGE: "sta usando il telefono",
+    # Past tense: the label is always shown next to how long ago it happened,
+    # and "sta usando il telefono 9 minuti fa" is not Italian.
+    EventKind.APP_USAGE: "ha usato il telefono",
     EventKind.CHARGER_CONNECTED: "ha collegato il caricabatterie",
     EventKind.CONFIRMATION: "ha risposto «sto bene»",
     EventKind.ACTIVITY: "si sta muovendo",

@@ -35,6 +35,18 @@ data class PermissionState(
         get() = fineLocation && backgroundLocation && activityRecognition &&
             notifications && bluetooth && usageStats && overlay && batteryUnrestricted
 
+    /**
+     * Whether the foreground service can legally start.
+     *
+     * Android 14+ refuses a `health` foreground service unless the app already
+     * holds a runtime permission that backs it, and refuses `location` likewise.
+     * Declaring them in the manifest is not enough. Starting anyway throws a
+     * SecurityException and kills the process -- which, before this check
+     * existed, happened the instant a user finished pairing.
+     */
+    val canRunService: Boolean
+        get() = activityRecognition || fineLocation
+
     val missing: List<String>
         get() = buildList {
             if (!fineLocation) add("posizione")
