@@ -11,8 +11,10 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import AlertDep, CommandDep, DeviceDep
+from app.api.deps import AlertDep, CommandDep, DeviceDep, LivenessDep, SessionDep
 from app.domain.commands import CommandStatus, ConfirmationResponse, is_sensitive, rung_of
+from app.models.identity import Subject
+from app.services.liveness import config_from_subject
 from app.schemas.commands import (
     CheckinPartialIn,
     CommandAckIn,
@@ -64,6 +66,8 @@ async def respond_to_command(
     device: DeviceDep,
     commands: CommandDep,
     alerts: AlertDep,
+    liveness: LivenessDep,
+    session: SessionDep,
 ) -> None:
     """The subject's answer to a rung-4 prompt."""
     action = await commands.get_for_device(command_id, device.subject_id)
@@ -73,6 +77,17 @@ async def respond_to_command(
     await commands.record_confirmation(
         action, payload.response, payload.responded_at, payload.source
     )
+
+    # Recompute immediately. A pressed "I'm fine" is the strongest evidence the
+    # system can hold, and without this it changed nothing a caregiver could
+    # see: the stored clocks stayed behind and the dashboard kept citing some
+    # weaker, older signal. The one unambiguous answer in the product has to be
+    # the one that moves it.
+    subject = await session.get(Subject, action.subject_id)
+    if subject is not None:
+        await liveness.recompute(
+            action.subject_id, config_from_subject(subject.config, subject.timezone)
+        )
 
     if payload.response is ConfirmationResponse.NEED_HELP:
         # One of the few legitimate sources of a red alert.

@@ -11,7 +11,7 @@ the test's loop cannot be used from another one.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -354,6 +354,44 @@ async def test_pressing_im_ok_becomes_the_strongest_presence_signal(
     assert snapshot["headline"]["state"] == "active"
     assert snapshot["headline"]["color"] == "green"
     assert snapshot["headline"]["evidence_kind"] == "confirmation"
+
+
+async def test_a_confirmation_outranks_an_earlier_weaker_signal(
+    client: AsyncClient, world: dict
+) -> None:
+    """Found in real use: the answer landed but the dashboard kept citing an
+    older, weaker signal, because nothing recomputed presence after it. The one
+    unambiguous statement in the product must be the one that moves it."""
+    owner = await login(client, OWNER)
+
+    # An earlier, weaker interaction.
+    await client.post(
+        "/v1/ingest/events",
+        headers=device_auth(world),
+        json={
+            "events": [
+                {
+                    "occurred_at": (datetime.now(UTC) - timedelta(minutes=3)).isoformat(),
+                    "source": "phone",
+                    "kind": "app_usage",
+                }
+            ]
+        },
+    )
+
+    created = (await escalate(client, world, owner, "confirm_prompt")).json()
+    await client.post(
+        f"/v1/commands/{created['id']}/response",
+        headers=device_auth(world),
+        json={"response": "im_ok", "responded_at": datetime.now(UTC).isoformat()},
+    )
+
+    snapshot = (
+        await client.get(f"/v1/subjects/{world['subject']}/snapshot", headers=owner)
+    ).json()
+    assert snapshot["headline"]["evidence_kind"] == "confirmation", (
+        "the pressed answer must win over the older app_usage"
+    )
 
 
 async def test_need_help_raises_a_red_alert(client: AsyncClient, world: dict) -> None:
