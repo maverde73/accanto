@@ -86,6 +86,25 @@ class ApiClient(
     suspend fun reportCheckin(checkinId: String, report: CheckinReportDto): ApiResult<Unit> =
         postNoContent("/v1/commands/checkins/$checkinId/report", report)
 
+    // ---- two-way audio ----
+
+    suspend fun audioSession(sessionId: String): ApiResult<AudioSessionDto> = request {
+        client.get("${baseUrl()}/v1/audio/$sessionId/device") { authorised() }
+    }
+
+    suspend fun audioAnnounced(sessionId: String): ApiResult<Unit> =
+        postNoContent("/v1/audio/$sessionId/announced", emptyMap<String, String>())
+
+    suspend fun audioSignal(sessionId: String, signal: SignalIn): ApiResult<Unit> =
+        postNoContent("/v1/audio/$sessionId/signal/subject", signal)
+
+    suspend fun audioSignals(sessionId: String, since: Long): ApiResult<List<SignalDto>> = request {
+        client.get("${baseUrl()}/v1/audio/$sessionId/signal/subject?since=$since") { authorised() }
+    }
+
+    suspend fun audioEnd(sessionId: String, by: String): ApiResult<Unit> =
+        postNoContent("/v1/audio/$sessionId/end", mapOf("by" to by))
+
     // ----------------------------------------------------------------- plumbing
 
     private suspend inline fun <reified B, reified T> post(path: String, body: B): ApiResult<T> =

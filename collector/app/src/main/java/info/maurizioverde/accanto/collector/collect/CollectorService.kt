@@ -65,6 +65,8 @@ class CollectorService : Service() {
     private lateinit var usage: UsageSource
     private lateinit var health: HealthConnectReader
     private lateinit var executor: CommandExecutor
+    private var call: AudioCall? = null
+    private var activeSession: String? = null
 
     private var liveModeSince: Long? = null
 
@@ -112,9 +114,14 @@ class CollectorService : Service() {
         activity.start()
         started = true
 
-        executor = CommandExecutor(this, graph, signals, health) { enabled ->
-            if (enabled) enableLiveLocation() else disableLiveLocation()
-        }
+        executor = CommandExecutor(
+            this,
+            graph,
+            signals,
+            health,
+            onLiveLocation = { enabled -> if (enabled) enableLiveLocation() else disableLiveLocation() },
+            onAudioChannel = { sessionId -> startAudioCall(sessionId) },
+        )
 
         scope.launch { uploadLoop() }
         scope.launch { heartbeatLoop() }
@@ -129,6 +136,7 @@ class CollectorService : Service() {
         when (intent?.action) {
             ACTION_LIVE_LOCATION_ON -> enableLiveLocation()
             ACTION_LIVE_LOCATION_OFF -> disableLiveLocation()
+            ACTION_END_AUDIO -> endAudioCall("subject")
             ACTION_PROMPT_RESPONSE -> {
                 val commandId = intent.getStringExtra(EXTRA_COMMAND_ID)
                 val response = intent.getStringExtra(EXTRA_RESPONSE)
@@ -394,6 +402,80 @@ class CollectorService : Service() {
         record(EventKind.APP_USAGE, Source.PHONE, lastUse)
     }
 
+    // -------------------------------------------------------------- audio call
+
+    private suspend fun startAudioCall(sessionId: String): Boolean {
+        endAudioCall("subject")
+
+        // The microphone needs its own foreground-service type. Adding it only
+        // for the duration of a call means the service does not hold a
+        // microphone claim while merely watching for steps.
+        if (!promoteToMicrophone()) return false
+
+        val session = AudioCall(this, scope, AudioBridge(graph))
+        call = session
+        activeSession = sessionId
+
+        val started = session.start(sessionId)
+        if (started) {
+            showCallNotification()
+        } else {
+            endAudioCall("subject")
+        }
+        return started
+    }
+
+    fun endAudioCall(by: String) {
+        val session = call ?: return
+        val id = activeSession
+        call = null
+        activeSession = null
+        scope.launch { session.stop(id, by) }
+        getSystemService(NotificationManager::class.java)?.cancel(CALL_NOTIFICATION_ID)
+        runCatching { startForegroundWithType(Permissions.inspect(this)) }
+    }
+
+    private fun promoteToMicrophone(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val permissions = Permissions.inspect(this)
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        if (permissions.activityRecognition) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+        if (permissions.fineLocation) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+
+        return try {
+            ServiceCompat.startForeground(
+                this, NOTIFICATION_ID, buildNotification(permissions), type,
+            )
+            true
+        } catch (error: SecurityException) {
+            // Android restricts starting a microphone foreground service from
+            // the background. Refused means no call, and the caregiver is told
+            // so rather than left waiting for audio that never arrives.
+            Log.w(TAG, "microfono rifiutato dalla piattaforma", error)
+            false
+        }
+    }
+
+    /** A persistent, unmissable notification for as long as the mic is open. */
+    private fun showCallNotification() {
+        val hangUp = PendingIntent.getService(
+            this,
+            0,
+            Intent(this, CollectorService::class.java).setAction(ACTION_END_AUDIO),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(this, AccantoApplication.CHANNEL_ALARM)
+            .setContentTitle(getString(R.string.call_active_title))
+            .setContentText(getString(R.string.call_active_text))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .addAction(R.drawable.ic_notification, getString(R.string.call_end), hangUp)
+            .build()
+        getSystemService(NotificationManager::class.java)?.notify(CALL_NOTIFICATION_ID, notification)
+    }
+
     // ------------------------------------------------------------- live location
 
     private fun enableLiveLocation() {
@@ -503,6 +585,8 @@ class CollectorService : Service() {
         const val ACTION_LIVE_LOCATION_ON = "info.maurizioverde.accanto.LIVE_ON"
         const val ACTION_LIVE_LOCATION_OFF = "info.maurizioverde.accanto.LIVE_OFF"
         const val ACTION_PROMPT_RESPONSE = "info.maurizioverde.accanto.PROMPT_RESPONSE"
+        const val ACTION_END_AUDIO = "info.maurizioverde.accanto.END_AUDIO"
+        private const val CALL_NOTIFICATION_ID = 1002
         const val EXTRA_COMMAND_ID = "command_id"
         const val EXTRA_RESPONSE = "response"
 

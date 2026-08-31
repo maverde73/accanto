@@ -85,6 +85,11 @@ object Permissions {
         batteryUnrestricted = ignoresBatteryOptimisations(context),
     )
 
+    /** Checked separately: the microphone is only needed for rung 5, and the
+     *  collector must run fully without it. */
+    fun canRecordAudio(context: Context): Boolean =
+        granted(context, Manifest.permission.RECORD_AUDIO)
+
     private fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 

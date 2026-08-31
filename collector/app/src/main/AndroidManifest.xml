@@ -24,6 +24,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Rung 5, two-way audio. The platform shows an indicator whenever the
+         microphone is live and there is no hiding it; the design says so out
+         loud beforehand rather than pretending otherwise. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Whether the watch is within Bluetooth range of the phone. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 

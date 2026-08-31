@@ -39,6 +39,7 @@ class CommandExecutor(
     private val signals: PhoneSignals,
     private val health: HealthConnectReader,
     private val onLiveLocation: (Boolean) -> Unit,
+    private val onAudioChannel: suspend (String) -> Boolean,
 ) {
 
     private val speaker = Speaker(context)
@@ -93,18 +94,56 @@ class CommandExecutor(
                 )
             }
 
-            "audio_channel" -> {
-                // Two-way audio needs a media path (WebRTC and a relay) that
-                // does not exist yet. Declared unavailable rather than quietly
-                // downgraded to something quieter, which once made the loudest
-                // rung indistinguishable from the softest.
-                ack(command, "failed", detail = "canale audio bidirezionale non implementato")
-            }
+            "audio_channel" -> openAudioChannel(command)
             else -> {
                 Log.w(TAG, "unknown command type ${command.type}")
                 ack(command, "failed", detail = "tipo di comando sconosciuto")
             }
         }
+    }
+
+    // ----------------------------------------------------------- audio channel
+
+    /**
+     * Announces the caller aloud, then opens the microphone.
+     *
+     * The order is the safeguard. The person is told who is about to be in the
+     * room *before* anything is listening, and the platform's own indicator
+     * stays lit for as long as it lasts. A channel that opened first and
+     * explained afterwards would be a different product.
+     */
+    private suspend fun openAudioChannel(command: CommandDto) {
+        val sessionId = (command.params["session_id"] as? JsonPrimitive)?.content
+        if (sessionId == null) {
+            ack(command, "failed", detail = "sessione audio mancante")
+            return
+        }
+
+        if (!Permissions.canRecordAudio(context)) {
+            ack(command, "failed", detail = "permesso microfono non concesso")
+            return
+        }
+
+        val caller = command.issuedBy ?: "Qualcuno"
+        val announced = speaker.announce(
+            from = null,
+            message = "$caller sta aprendo un collegamento audio. Puoi parlare.",
+        )
+        if (!announced) {
+            // No announcement, no microphone. Opening the channel anyway would
+            // turn a call into eavesdropping, which is precisely the thing the
+            // announcement exists to prevent.
+            ack(command, "failed", detail = "annuncio vocale non riuscito, canale non aperto")
+            return
+        }
+        graph.api.audioAnnounced(sessionId)
+
+        val started = onAudioChannel(sessionId)
+        ack(
+            command,
+            if (started) "executed" else "failed",
+            detail = if (started) null else "collegamento audio non stabilito",
+        )
     }
 
     // ------------------------------------------------------------- force sync

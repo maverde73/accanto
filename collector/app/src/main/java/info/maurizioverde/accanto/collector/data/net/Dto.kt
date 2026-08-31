@@ -93,3 +93,17 @@ data class CheckinReportDto(
     val partial: Boolean,
     val result: JsonObject,
 )
+
+@Serializable
+data class AudioSessionDto(
+    @SerialName("session_id") val sessionId: String,
+    val status: String,
+    /** STUN, plus TURN when the server has one configured. */
+    @SerialName("ice_servers") val iceServers: List<JsonObject> = emptyList(),
+)
+
+@Serializable
+data class SignalIn(val kind: String, val payload: String)
+
+@Serializable
+data class SignalDto(val id: Long, val kind: String, val payload: String)
