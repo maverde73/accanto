@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ingest, subjects
+from app.api import alerts, auth, checkins, commands, grants, ingest, location, realtime, subjects
 from app.core.config import get_settings
 from app.core.db import dispose_engine
 
@@ -24,7 +24,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Accanto",
         description="Presence monitoring for a person in your care.",
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
@@ -37,8 +37,18 @@ def create_app() -> FastAPI:
             allow_headers=["Authorization", "Content-Type"],
         )
 
-    app.include_router(ingest.router, prefix="/v1")
-    app.include_router(subjects.router, prefix="/v1")
+    for router in (
+        auth.router,
+        ingest.router,
+        commands.router,
+        subjects.router,
+        checkins.router,
+        location.router,
+        alerts.router,
+        grants.router,
+        realtime.router,
+    ):
+        app.include_router(router, prefix="/v1")
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

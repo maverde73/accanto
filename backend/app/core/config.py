@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+DEV_JWT_SECRET = "dev-only-insecure-secret-change-me-before-production"
 
 
 class Settings(BaseSettings):
@@ -19,13 +22,20 @@ class Settings(BaseSettings):
         description="Async SQLAlchemy DSN.",
     )
 
-    jwt_secret: str = Field(default="dev-only-change-me", min_length=8)
+    jwt_secret: str = Field(default=DEV_JWT_SECRET, min_length=32)
+    """At least 32 bytes: HMAC-SHA256 keys shorter than the digest weaken the
+    signature (RFC 7518 §3.2). The dev default is refused in production."""
     jwt_algorithm: str = "HS256"
     access_token_ttl_seconds: int = 900
 
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     """Explicit origins in production. Never a wildcard -- the viewer carries
-    health and location data."""
+    health and location data.
+
+    `NoDecode` is required: without it pydantic-settings tries to JSON-parse the
+    environment value before any validator runs, so the documented
+    comma-separated form would crash at startup instead of being split.
+    """
 
     fcm_credentials_path: str | None = None
 
@@ -45,7 +55,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     settings = Settings()
     if settings.is_production:
-        if settings.jwt_secret == "dev-only-change-me":
+        if settings.jwt_secret == DEV_JWT_SECRET:
             raise RuntimeError("ACCANTO_JWT_SECRET must be set in production")
         if "*" in settings.cors_origins:
             raise RuntimeError("Wildcard CORS origin is not allowed in production")

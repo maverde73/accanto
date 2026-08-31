@@ -1,7 +1,7 @@
 # Accanto — backend
 
 FastAPI + PostgreSQL. Verità unica del sistema: ingest, calcolo della presenza,
-autorizzazioni, canale comandi.
+autorizzazioni, canale comandi, realtime.
 
 Progetto complessivo: [`../README.md`](../README.md) ·
 design: [`../docs/09-backend.md`](../docs/09-backend.md).
@@ -12,6 +12,8 @@ design: [`../docs/09-backend.md`](../docs/09-backend.md).
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 cp .env.example .env
+docker run -d --name accanto-pg -e POSTGRES_USER=accanto -e POSTGRES_PASSWORD=accanto -e POSTGRES_DB=accanto -p 5432:5432 postgres:16-alpine
+.venv/bin/alembic upgrade head
 .venv/bin/uvicorn app.main:app --reload
 ```
 
@@ -23,61 +25,87 @@ API su `http://localhost:8000`, documentazione interattiva su `/docs`.
 .venv/bin/python -m pytest -q
 ```
 
-I test del dominio (`test_liveness.py`, `test_dedup.py`) **non richiedono un
-database**: `app/domain/` è stdlib puro, senza I/O. È una scelta deliberata — la
-logica che decide cosa vede un caregiver dev'essere verificabile in millisecondi.
+I test del dominio **non richiedono un database**: `app/domain/` è stdlib puro,
+senza I/O. È deliberato — la logica che decide cosa vede un caregiver dev'essere
+verificabile in millisecondi.
 
-I test marcati `@pytest.mark.integration` richiedono un PostgreSQL attivo:
+I test di integrazione girano solo se punti a un PostgreSQL vero:
 
 ```bash
-.venv/bin/python -m pytest -m "not integration"   # solo unit
+ACCANTO_TEST_DATABASE_URL=postgresql+asyncpg://accanto:accanto@localhost:5432/accanto \
+  .venv/bin/python -m pytest -q
 ```
+
+Senza quella variabile si saltano automaticamente. Sono su Postgres reale e non
+su SQLite perché ciò che va verificato — `ON CONFLICT DO NOTHING`, `DISTINCT ON`,
+JSONB, colonne array — su SQLite non esiste: simularlo vorrebbe dire testare il
+simulatore.
 
 ## Struttura
 
 ```
 app/
-  domain/        logica pura: tier, fusione presenza, chiavi di dedup (no I/O)
-  models/        tabelle SQLAlchemy
-  schemas/       contratti Pydantic in ingresso/uscita
+  domain/        logica pura: tier, presenza, scope, geo, alert, comandi (no I/O)
+  models/        17 tabelle SQLAlchemy
+  schemas/       contratti Pydantic
   repositories/  accesso dati
-  services/      orchestrazione (LivenessService, IngestService)
-  api/           router FastAPI e dipendenze
-  core/          config, sessione DB, sicurezza
+  services/      orchestrazione (liveness, ingest, commands, alerts, grants)
+  realtime/      hub WebSocket con filtro per scope
+  adapters/      push FCM (con sender di sviluppo che logga)
+  api/           router e dipendenze
+  core/          config, DB, auth, sicurezza
+alembic/         migrazioni
 ```
 
 La dipendenza va **sempre** verso l'interno: `api → services → repositories →
-models`, e `domain` non dipende da nulla. Se un giorno cambia il framework o il
-database, il dominio non si tocca.
+models`, e `domain` non dipende da nulla.
 
 ## Invarianti protette da test di regressione
 
-Sono le regole che decidono se il prodotto è affidabile, non dettagli:
+Non sono dettagli: sono ciò che decide se il prodotto è affidabile.
 
-1. **La fusione non produce mai il rosso.** Nessuna combinazione di dati mancanti
-   o vecchi può generare un allarme. Il rosso nasce solo dalla presenza positiva
-   di un problema. (`test_fusion_never_produces_red`)
-2. **Il silenzio totale è grigio, mai ambra o verde.** La causa più comune è un
-   guasto della pipeline; colorarlo come allarme insegna a ignorare gli allarmi.
-3. **La headline porta l'ora dell'evento, non quella del sync.** Un batch di dati
-   vecchi che arriva ora non è attività attuale.
-4. **Il tier è derivato dal server**, mai preso dal payload: un collector
-   manomesso non deve poter promuovere un segnale debole a prova di coscienza.
-   (`test_client_cannot_choose_its_own_tier`)
+1. **La fusione non produce mai il rosso.** Verificato su tutte le combinazioni
+   di freschezza dei quattro orologi.
+2. **Il silenzio totale è grigio**, mai ambra o verde.
+3. **`no_data` non può essere configurato rosso**, e l'API restituisce la
+   `effective_severity` così l'owner vede il cap invece di crederlo attivo.
+4. **La headline porta l'ora dell'evento**, non quella del sync.
+5. **Il tier è derivato dal server**, mai dal payload del client.
+6. **Un caregiver `location:coarse` non riceve mai le coordinate esatte** — né
+   via REST né via WebSocket. La riduzione avviene sul server.
+7. **La revoca di un grant taglia l'accesso subito**, con la stessa sessione.
+8. **La scadenza di un grant è verificata alla lettura**, non da un cron.
+
+## Scelte di implementazione da conoscere
+
+- **`access_grant`, non `grant`**: `GRANT` è parola riservata SQL.
+- **404 invece di 403** per un subject non autorizzato: confermare che una
+  persona esiste è già una divulgazione.
+- **Token device**: SHA-256 (stringhe casuali ad alta entropia). Argon2 resta
+  per le password utente.
+- **Comandi firmati in HMAC**: i gradini 4-5 non si eseguono mai sul solo
+  payload della push. Il collector rivalida con `GET /v1/commands/{id}`.
+- **Le push sono best-effort**: `GET /v1/commands/pending/list` permette al
+  collector di recuperare ciò che ha perso.
+- **`NoDecode` su `cors_origins`**: senza, pydantic-settings tenta di decodificare
+  come JSON il valore d'ambiente prima dei validator, e la forma documentata
+  separata da virgole farebbe crashare l'avvio.
+- **Bucketing dedup a finestre fisse**: la chiave dev'essere calcolabile da un
+  evento isolato. Il debounce vero è del collector.
+
+## Limiti noti
+
+- **Il realtime hub è in-process.** Con più worker serve un broker condiviso
+  (Redis pub/sub) dietro la stessa interfaccia; la superficie
+  publish/subscribe è volutamente stretta per rendere lo scambio locale.
+- **Nessun rate limiting** ancora (previsto su ingest ed escalation).
+- **Web Push ai caregiver** non implementato: `push_token` esiste, il mittente no.
+- **`activity_baseline`** è solo schema; il calcolo arriva in fase 3.
 
 ## Stato
 
-Fase 1 in corso. Implementato: dominio della presenza, modelli (9 tabelle),
-ingest idempotente, snapshot, autenticazione device.
+Fasi 1 e 2 del backend complete: dominio, 17 tabelle con migrazioni, ingest
+idempotente, autorizzazione per scope, check-in on-demand, scala di escalation,
+canale comandi firmato, realtime con filtro scope, alert engine, audit.
 
-Ancora da fare: migrazioni Alembic, autorizzazione per scope sui grant, check-in
-on-demand e canale comandi FCM, realtime WebSocket, alert engine.
-
-## Note di implementazione
-
-- **`access_grant`, non `grant`**: `GRANT` è una parola riservata SQL.
-- **Token device**: hash SHA-256 (stringhe casuali ad alta entropia, non
-  password). Argon2 resta per le password utente.
-- **Bucketing delle dedup key**: finestre fisse allineate all'epoch, non
-  scorrevoli — la chiave dev'essere calcolabile da un evento isolato. Il debounce
-  vero è responsabilità del collector.
+**139 test passano** (dominio + integrazione su PostgreSQL reale).

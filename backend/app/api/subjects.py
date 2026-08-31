@@ -1,16 +1,17 @@
-"""Viewer-facing presence endpoints.
-
-Authorisation by grant scopes is not wired yet (phase 1 continues); the shape of
-the response is final so the collector and viewer can build against it.
-"""
+"""Viewer-facing presence endpoints, gated by grant scopes."""
 
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
 
-from app.api.deps import LivenessDep, SessionDep
+from app.api.deps import GrantDep, LivenessDep, SessionDep, UserDep, require_scope
+from app.domain.scopes import Scope
+from app.models.identity import Subject
 from app.repositories.snapshot import SnapshotRepository
 from app.schemas.snapshot import (
     BatteriesOut,
@@ -22,18 +23,47 @@ from app.schemas.snapshot import (
     localise_evidence,
 )
 from app.services.liveness import LivenessService, config_from_subject
-from app.models.identity import Subject
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
+
+LivenessScoped = Annotated[tuple[Subject, set[Scope]], Depends(require_scope(Scope.LIVENESS))]
+
+
+class SubjectOut(BaseModel):
+    id: str
+    display_name: str
+    timezone: str
+    scopes: list[str]
+
+
+@router.get("", response_model=list[SubjectOut])
+async def list_subjects(
+    user: UserDep, session: SessionDep, grants: GrantDep
+) -> list[SubjectOut]:
+    """Only subjects this user currently holds an effective grant over."""
+    ids = await grants.visible_subject_ids(user.id)
+    if not ids:
+        return []
+    rows = (await session.execute(select(Subject).where(Subject.id.in_(ids)))).scalars().all()
+    out: list[SubjectOut] = []
+    for subject in rows:
+        scopes = await grants.effective_scopes(user.id, subject.id)
+        out.append(
+            SubjectOut(
+                id=str(subject.id),
+                display_name=subject.display_name,
+                timezone=subject.timezone,
+                scopes=sorted(s.value for s in scopes),
+            )
+        )
+    return out
 
 
 @router.get("/{subject_id}/snapshot", response_model=SnapshotOut)
 async def read_snapshot(
-    subject_id: uuid.UUID, session: SessionDep, liveness: LivenessDep
+    subject_id: uuid.UUID, scoped: LivenessScoped, session: SessionDep, liveness: LivenessDep
 ) -> SnapshotOut:
-    subject = await session.get(Subject, subject_id)
-    if subject is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Subject not found")
+    subject, scopes = scoped
 
     snapshot = await SnapshotRepository(session).get(subject_id)
     if snapshot is None:
@@ -41,8 +71,9 @@ async def read_snapshot(
         # is a legitimate state ("no_data"), not a missing resource.
         cfg = config_from_subject(subject.config, subject.timezone)
         values = await liveness.recompute(subject_id, cfg)
-        return _from_values(values)
+        return _from_values(values, scopes)
 
+    show_vitals = Scope.VITALS in scopes
     return SnapshotOut(
         subject_id=str(subject_id),
         computed_at=snapshot.computed_at,
@@ -59,7 +90,13 @@ async def read_snapshot(
             vital=snapshot.last_vital_at,
             contact=snapshot.last_contact_at,
         ),
-        vitals=VitalsOut(bpm=snapshot.latest_bpm, bpm_at=snapshot.latest_bpm_at),
+        # The vital *clock* stays visible with `liveness` alone -- knowing that a
+        # heartbeat was seen five minutes ago is presence, not a health record.
+        # The BPM value itself requires the `vitals` scope.
+        vitals=VitalsOut(
+            bpm=snapshot.latest_bpm if show_vitals else None,
+            bpm_at=snapshot.latest_bpm_at if show_vitals else None,
+        ),
         batteries=BatteriesOut(
             phone_pct=snapshot.phone_battery_pct,
             watch_likely_charging=snapshot.watch_likely_charging,
@@ -71,7 +108,8 @@ async def read_snapshot(
     )
 
 
-def _from_values(v: dict) -> SnapshotOut:
+def _from_values(v: dict, scopes: set[Scope]) -> SnapshotOut:
+    show_vitals = Scope.VITALS in scopes
     return SnapshotOut(
         subject_id=str(v["subject_id"]),
         computed_at=v["computed_at"],
@@ -88,7 +126,10 @@ def _from_values(v: dict) -> SnapshotOut:
             vital=v["last_vital_at"],
             contact=v["last_contact_at"],
         ),
-        vitals=VitalsOut(bpm=v["latest_bpm"], bpm_at=v["latest_bpm_at"]),
+        vitals=VitalsOut(
+            bpm=v["latest_bpm"] if show_vitals else None,
+            bpm_at=v["latest_bpm_at"] if show_vitals else None,
+        ),
         batteries=BatteriesOut(
             phone_pct=v["phone_battery_pct"], watch_likely_charging=v["watch_likely_charging"]
         ),

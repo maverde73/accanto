@@ -75,10 +75,13 @@ create index on device (subject_id);
 
 ## Autorizzazioni
 
-### `grant` — chi può vedere cosa, con quale granularità, fino a quando
+### `access_grant` — chi può vedere cosa, con quale granularità, fino a quando
+
+> ⚠️ La tabella si chiama **`access_grant`**, non `grant`: `GRANT` è una parola
+> riservata SQL e una tabella con quel nome richiederebbe il quoting ovunque.
 
 ```sql
-create table grant (
+create table access_grant (
   id            uuid        primary key default gen_random_uuid(),
   subject_id    uuid        not null references subject(id) on delete cascade,
   grantee_user_id uuid      not null references app_user(id) on delete cascade,

@@ -29,6 +29,13 @@ Sono spike di poche ore ciascuno; il loro esito può cambiare il piano.
 > V1 e V2 sono le due che reggono l'intero valore del check-in on-demand: farle per
 > prime.
 
+> **Stato al 31/08/2026.** Il **backend** delle fasi 1 e 2 è implementato e
+> testato (139 test, dominio + integrazione su PostgreSQL reale): dominio della
+> presenza, 17 tabelle con migrazioni Alembic, ingest idempotente, autorizzazione
+> per scope, check-in on-demand, scala di escalation con comandi firmati,
+> realtime WebSocket con filtro per scope, alert engine, audit log.
+> Mancano **collector** e **viewer**. Vedi [`../backend/README.md`](../backend/README.md).
+
 ## Fase 1 — MVP verticale (il cuore utile)
 
 Obiettivo: **rispondere a "come sta ora?"** con presenza + check-in + mappa, per
