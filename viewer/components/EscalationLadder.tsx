@@ -27,10 +27,16 @@ const RUNGS: Rung[] = [
   {
     rung: 3,
     actionType: "vibrate",
-    title: "Fai vibrare il polso",
+    // Named for what it does, not what it was hoped to do. It was called "make
+    // the wrist buzz", relying on Mi Fitness mirroring phone notifications to
+    // the watch -- which does not happen on the tested phone. A rung that
+    // promises the wrist and reaches only the phone is the kind of small lie
+    // that costs a caregiver their trust in everything else here.
+    title: "Avvisa sul telefono",
     effect:
-      "Una notifica discreta sul telefono, che l'orologio ripete al polso. Può rispondere " +
-      "«sto bene» con un tocco, senza aprire nulla e senza suoni.",
+      "Una notifica discreta con vibrazione, senza suoni. Può rispondere «sto bene» " +
+      "con un tocco, senza aprire nulla. Arriva anche al polso solo se l'orologio è " +
+      "impostato per ripetere le notifiche del telefono.",
     scope: "escalation:notify",
     tone: "green",
   },

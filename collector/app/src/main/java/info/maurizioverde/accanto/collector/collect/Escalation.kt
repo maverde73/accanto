@@ -69,7 +69,10 @@ object Escalation {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentIntent(open)
-            .addAction(0, "Sto bene", reply)
+            // A real drawable, not 0: an invalid icon resource can make the
+            // action silently not render, which turns the one-tap reply into a
+            // notification that appears to do nothing.
+            .addAction(R.drawable.ic_notification, "Sto bene", reply)
             .setAutoCancel(true)
             .build()
 
